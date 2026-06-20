@@ -33,10 +33,11 @@ POOL = os.environ.get("PVE_POOL", "iselab")
 GOLDEN_SNAPSHOT = "golden"
 
 # The ONLY VMs the portal may touch (blast-radius allowlist). Display names only.
-ENCLAVE_VMS = {125: "ise1", 126: "dc-demo", 130: "wlc-demo"}
+ENCLAVE_VMS = {125: "ise1", 126: "dc-demo", 130: "wlc-demo", 134: "jumpbox"}
 
-# Reset order: DC first (DNS/NTP) so ISE/WLC find their dependencies on rollback.
-RESET_ORDER = [126, 125, 130]
+# Reset order: DC first (DNS/NTP) so ISE/WLC find their dependencies on rollback;
+# the jumpbox last, so it comes back to a clean desktop after the devices are up.
+RESET_ORDER = [126, 125, 130, 134]
 
 # Guardrails
 RATE_LIMIT_WINDOW_S = 60
