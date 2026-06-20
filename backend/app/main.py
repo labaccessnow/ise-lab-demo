@@ -10,11 +10,13 @@ this service must only ever be reachable from the portal, never the internet.
 """
 from fastapi import FastAPI, Header, HTTPException
 
-from . import guardrails
+from . import guardrails, sessions
 from .actions import ACTIONS
 from .proxmox import Proxmox, ProxmoxError
+from .webhook import router as webhook_router
 
 app = FastAPI(title="ise-lab-demo backend", docs_url=None, redoc_url=None)
+app.include_router(webhook_router)
 
 _px: Proxmox | None = None
 
@@ -36,6 +38,15 @@ def _authorized(have: str, need: str) -> bool:
 @app.get("/healthz")
 def healthz():
     return {"ok": True, "running": guardrails.current()["action"]}
+
+
+@app.get("/api/session/{token}")
+def session_info(token: str):
+    """Let the portal validate a booking session token (presence + expiry)."""
+    s = sessions.validate(token)
+    if not s:
+        raise HTTPException(404, "invalid or expired session")
+    return {"valid": True, "lab": s["lab_id"], "expires_at": s["expires_at"]}
 
 
 @app.get("/api/actions")
