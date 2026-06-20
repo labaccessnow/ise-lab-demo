@@ -98,7 +98,64 @@ $("#refreshBtn").addEventListener("click", async () => {
   catch (e) { log(`could not load state: ${e.message}`, "err"); }
 });
 
+// --- API playground ---------------------------------------------------------
+function opRow(op) {
+  const row = document.createElement("div");
+  row.className = "op";
+  const inputs = (op.params || []).map((p) =>
+    `<input class="op-param" data-name="${p.name}" placeholder="${p.label}${p.example ? " · e.g. " + p.example : ""}" />`
+  ).join("");
+  row.innerHTML = `
+    <div class="op-info">
+      <div class="op-label">${op.label}${op.mutating ? ' <span class="pill write">write</span>' : ""}</div>
+      <div class="op-sum">${op.summary}</div>
+    </div>
+    <div class="op-run">${inputs}<button class="btn small run" type="button">Run</button></div>`;
+  row.querySelector(".run").addEventListener("click", () => runOp(op, row));
+  return row;
+}
+
+function renderCatalog(ops) {
+  const wrap = $("#catalog");
+  wrap.innerHTML = "";
+  if (!ops.length) { wrap.innerHTML = `<div class="loading">No operations available.</div>`; return; }
+  for (const op of ops) wrap.appendChild(opRow(op));
+}
+
+async function runOp(op, row) {
+  const btn = row.querySelector(".run");
+  const out = $("#apiResult");
+  const params = {};
+  let missing = false;
+  row.querySelectorAll(".op-param").forEach((inp) => {
+    params[inp.dataset.name] = inp.value.trim();
+    if (!inp.value.trim()) missing = true;
+  });
+  if ((op.params || []).length && missing) { log(`${op.label}: fill in the field first.`, "err"); return; }
+  btn.disabled = true;
+  out.hidden = false;
+  out.textContent = `running ${op.id}…`;
+  log(`API ▸ ${op.label}`);
+  try {
+    const data = await api("POST", `/api/action/${op.id}`, (op.params || []).length ? params : {});
+    out.textContent = JSON.stringify(data.result, null, 2);
+    log(`API ◂ ${op.label} — ok`, "ok");
+    if (op.mutating) loadStatus().catch(() => {});
+  } catch (e) {
+    out.textContent = `Error: ${e.message}`;
+    log(`API ◂ ${op.label} — ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadCatalog() {
+  try { renderCatalog(await api("GET", "/api/catalog")); }
+  catch (e) { $("#catalog").innerHTML = `<div class="loading">Could not load operations: ${e.message}</div>`; }
+}
+
 (async () => {
   try { await loadStatus(); }
   catch (e) { $("#vms").innerHTML = `<div class="loading">Lab backend unreachable: ${e.message}</div>`; }
+  loadCatalog();
 })();

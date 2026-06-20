@@ -17,7 +17,7 @@ import os
 import uuid
 
 import httpx
-from fastapi import Cookie, FastAPI
+from fastapi import Cookie, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -34,9 +34,9 @@ def _role() -> str:
     return "visitor"
 
 
-async def _proxy(method: str, path: str, sid: str) -> JSONResponse:
+async def _proxy(method: str, path: str, sid: str, json_body=None) -> JSONResponse:
     try:
-        r = await _client.request(method, path, headers={"X-Role": _role(), "X-Session": sid})
+        r = await _client.request(method, path, headers={"X-Role": _role(), "X-Session": sid}, json=json_body)
     except httpx.HTTPError as e:
         return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
     try:
@@ -53,9 +53,18 @@ async def actions(sid: str = Cookie(None)):
     return await _proxy("GET", "/api/actions", sid or uuid.uuid4().hex)
 
 
+@app.get("/api/catalog")
+async def catalog(sid: str = Cookie(None)):
+    return await _proxy("GET", "/api/catalog", sid or uuid.uuid4().hex)
+
+
 @app.post("/api/action/{action_id}")
-async def action(action_id: str, sid: str = Cookie(None)):
-    return await _proxy("POST", f"/api/action/{action_id}", sid or uuid.uuid4().hex)
+async def action(action_id: str, request: Request, sid: str = Cookie(None)):
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    return await _proxy("POST", f"/api/action/{action_id}", sid or uuid.uuid4().hex, json_body=body)
 
 
 @app.get("/healthz")

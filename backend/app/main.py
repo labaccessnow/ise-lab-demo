@@ -8,10 +8,11 @@ Auth here is intentionally a stub (X-Role / X-Session headers set by the trusted
 portal). Real visitor/admin auth (Authelia + demo-session token) lands in Phase 6;
 this service must only ever be reachable from the portal, never the internet.
 """
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Body, FastAPI, Header, HTTPException
 
-from . import guardrails, sessions
+from . import catalog, guardrails, sessions
 from .actions import ACTIONS
+from .devices import DeviceError
 from .proxmox import Proxmox, ProxmoxError
 from .webhook import router as webhook_router
 
@@ -60,6 +61,7 @@ def list_actions(x_role: str = Header("visitor")):
 
 @app.post("/api/action/{action_id}")
 def run_action(action_id: str,
+               payload: dict | None = Body(default=None),
                x_role: str = Header("visitor"),
                x_session: str = Header("anon")):
     act = ACTIONS.get(action_id)
@@ -78,9 +80,15 @@ def run_action(action_id: str,
         except guardrails.Busy as e:
             raise HTTPException(409, str(e))
     try:
-        return {"action": action_id, "result": act.fn(px(), {})}
-    except ProxmoxError as e:
+        return {"action": action_id, "result": act.fn(px(), payload or {})}
+    except (ProxmoxError, DeviceError) as e:
         raise HTTPException(502, str(e))
     finally:
         if act.mutating:
             guardrails.release()
+
+
+@app.get("/api/catalog")
+def api_catalog(x_role: str = Header("visitor")):
+    """The API playground catalog the visitor's role may run (id, params, etc.)."""
+    return [op for op in catalog.public() if _authorized(x_role, op["role"])]

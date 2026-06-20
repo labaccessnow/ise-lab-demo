@@ -8,6 +8,7 @@ The broad ISE/WLC/PA API catalog (Phase 5b) plugs in as more entries here.
 from dataclasses import dataclass
 from typing import Callable
 
+from . import catalog
 from .config import ENCLAVE_VMS, GOLDEN_SNAPSHOT, RESET_ORDER
 
 
@@ -59,3 +60,9 @@ ACTIONS: dict[str, Action] = {
     "lab.reset":           Action("visitor", True,  "Reset the lab to the golden snapshot", _reset),
     "lab.snapshot_golden": Action("admin",   True,  "Re-baseline the golden snapshot", _snapshot_golden),
 }
+
+# The API playground catalog plugs in as allowlisted actions (Phase 5b). Each op
+# becomes an Action whose handler ignores Proxmox and drives the device API.
+for _cid, _cop in catalog.CATALOG.items():
+    ACTIONS[_cid] = Action(_cop["role"], _cop["mutating"], _cop["summary"],
+                           lambda px, params, _op=_cop: _op["call"](params))

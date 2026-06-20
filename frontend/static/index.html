@@ -55,6 +55,13 @@
       </div>
     </section>
 
+    <section class="panel" id="playgroundPanel">
+      <div class="panel-head"><h2>API playground</h2><span class="muted">drive the live device APIs</span></div>
+      <p class="hint pg-intro">Run real Cisco ISE API calls straight through the portal. The backend holds the credentials and only passes this fixed allowlist — reads are safe; the one write touches a throwaway object a reset wipes. You never see a credential or reach a device directly.</p>
+      <div class="catalog" id="catalog"><div class="loading">Loading operations…</div></div>
+      <pre class="result" id="apiResult" hidden></pre>
+    </section>
+
     <section class="panel log-panel">
       <div class="panel-head"><h2>Activity</h2><span class="muted" id="sessionTag"></span></div>
       <pre class="log" id="log">› ready.</pre>
