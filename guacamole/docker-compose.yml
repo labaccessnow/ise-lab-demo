@@ -1,0 +1,41 @@
+# Apache Guacamole — browser RDP gateway into the enclave jumpbox (ise-lab-demo).
+#
+# Runs on the trusted Tier-2 host: it reaches the jumpbox at 0.0.0.0:3389 over
+# the mgmt→enclave path and is fronted by the edge (desktop.lab.labaccessnow.com,
+# Authentik-gated). The visitor's browser only ever talks to Guacamole — pixels,
+# not packets — so it never gets a route into the lab network.
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: guacamole_db
+      POSTGRES_USER: guacamole
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    depends_on: [postgres, guacd]
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_HOSTNAME: postgres
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_USER: guacamole
+      POSTGRESQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRESQL_AUTO_CREATE_ACCOUNTS: "true"
+      WEBAPP_CONTEXT: ROOT
+      # SSO: the edge (Authentik-gated) passes a fixed REMOTE_USER header and
+      # Guacamole trusts it — no second login. Guacamole :8080 is ufw-locked to the
+      # edge only, so the header can't be spoofed by reaching Guacamole directly.
+      HEADER_ENABLED: "true"
+      HTTP_AUTH_HEADER: REMOTE_USER
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

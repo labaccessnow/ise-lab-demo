@@ -29,3 +29,6 @@ catalog/generated/        # generated API catalog (rebuilt from live specs)
 # --- mkdocs build output ---
 /site/
 backend/sessions.json
+guacamole/.env
+guacamole/data/
+guacamole/initdb/
