@@ -58,6 +58,12 @@ async def catalog(sid: str = Cookie(None)):
     return await _proxy("GET", "/api/catalog", sid or uuid.uuid4().hex)
 
 
+@app.get("/api/session/{token}")
+async def session_check(token: str):
+    # Validate a booking handoff token (presence + expiry) against the backend.
+    return await _proxy("GET", f"/api/session/{token}", token)
+
+
 @app.post("/api/action/{action_id}")
 async def action(action_id: str, request: Request, sid: str = Cookie(None)):
     try:

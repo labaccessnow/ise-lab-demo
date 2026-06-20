@@ -154,7 +154,39 @@ async function loadCatalog() {
   catch (e) { $("#catalog").innerHTML = `<div class="loading">Could not load operations: ${e.message}</div>`; }
 }
 
+// --- booking handoff: a ?session=<token> link from a reserved slot ------------
+function setCookie(name, value, maxAge) {
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; samesite=lax`;
+}
+
+async function checkBookingSession() {
+  const url = new URL(location.href);
+  const token = url.searchParams.get("session");
+  if (!token) return;
+  const banner = $("#sessionBanner");
+  banner.hidden = false;
+  banner.className = "session-banner";
+  banner.textContent = "checking your booking…";
+  try {
+    const s = await api("GET", `/api/session/${encodeURIComponent(token)}`);
+    if (!s || !s.valid) throw new Error("invalid");
+    setCookie("sid", token, 86400);
+    const until = new Date(s.expires_at * 1000)
+      .toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    banner.className = "session-banner ok";
+    banner.textContent = `🎟  Reserved lab session active — your booked time runs until ${until}.`;
+    log(`booked session active until ${until}`, "ok");
+  } catch (_) {
+    banner.className = "session-banner bad";
+    banner.textContent = "This booking link is invalid or has expired — book again to reserve a fresh slot.";
+  }
+  // strip the token from the address bar so it isn't re-shared or re-run on refresh
+  url.searchParams.delete("session");
+  history.replaceState({}, "", url.pathname + url.search);
+}
+
 (async () => {
+  await checkBookingSession();
   try { await loadStatus(); }
   catch (e) { $("#vms").innerHTML = `<div class="loading">Lab backend unreachable: ${e.message}</div>`; }
   loadCatalog();
