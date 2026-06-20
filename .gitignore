@@ -32,3 +32,4 @@ backend/sessions.json
 guacamole/.env
 guacamole/data/
 guacamole/initdb/
+backend/.env

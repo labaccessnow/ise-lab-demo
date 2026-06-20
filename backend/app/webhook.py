@@ -16,7 +16,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 
-from . import sessions
+from . import emailer, sessions
 
 router = APIRouter()
 
@@ -59,7 +59,12 @@ async def cal_booking(request: Request):
     lab_id = _LAB_BY_EVENT.get(slug, _DEFAULT_LAB)
 
     tok = sessions.mint(lab_id, email, expires_at)
-    return {
-        "ok": True, "lab": lab_id, "session": tok,
-        "link": f"https://lab.labaccessnow.com/?session={tok}",
-    }
+    link = f"https://lab.labaccessnow.com/?session={tok}"
+    emailed = False
+    try:
+        until = datetime.utcfromtimestamp(expires_at).strftime("%b %d %H:%M UTC")
+        emailer.send_booking_link(email, link, until)
+        emailed = True
+    except Exception as e:  # best-effort: the token still exists if mail fails
+        print(f"booking email to {email} failed: {e}")
+    return {"ok": True, "lab": lab_id, "session": tok, "link": link, "emailed": emailed}
