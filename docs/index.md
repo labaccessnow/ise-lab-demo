@@ -13,10 +13,20 @@ It is **demo-only by design**: tearing the lab down and rebuilding it *is* the d
 reset wipes the enclave back to a known-good state, a visitor can safely *write* configuration — the
 API playground is real, not a read-only tour.
 
+!!! tip "Try it live"
+    Want to drive this lab yourself? [**Book a demo →**](https://book.labaccessnow.com) and I'll walk you through it.
+
 !!! note "Why a golden-snapshot reset instead of a rebuild"
     A from-scratch ISE build is a poor interactive loop — first boot alone is 45–65 minutes. So the
     default visitor action is a **rollback to a golden snapshot (~1–2 minutes)**. Full rebuilds and
     scale-out are still available, but as deliberate admin actions.
+
+!!! info "Status — design and foundations"
+    The architecture on this page is the **full design**. Built today: the Ansible engine, a
+    least-privilege Proxmox token, and the backend runner skeleton (allowlisted actions + guardrails).
+    In progress or planned: the visitor portal, the generated API catalog, the Palo Alto / NAD /
+    endpoint / AP devices, the on-DC certificate authority, and the public edge. Each page flags what's
+    live versus planned.
 
 ## The three-tier spine
 
