@@ -1,0 +1,84 @@
+:root {
+  --bg: #0b0e14;
+  --bg-2: #11151f;
+  --panel: #131824;
+  --line: #232a3a;
+  --fg: #e6e9f0;
+  --muted: #8b94a7;
+  --accent: #5aa9ff;
+  --accent-2: #7c8cff;
+  --ok: #3ad29f;
+  --warn: #ffb454;
+  --bad: #ff6b6b;
+  --radius: 12px;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: radial-gradient(1200px 600px at 70% -10%, #16203a 0%, var(--bg) 55%) no-repeat, var(--bg);
+  color: var(--fg);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+}
+.wrap { width: min(940px, 92vw); margin: 0 auto; }
+.muted { color: var(--muted); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* header */
+.top { border-bottom: 1px solid var(--line); background: rgba(11,14,20,.6); backdrop-filter: blur(6px); position: sticky; top: 0; z-index: 5; }
+.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 58px; }
+.brand { font-weight: 700; letter-spacing: -.01em; font-size: 17px; }
+.brand .dot { color: var(--accent); margin: 0 1px; }
+.brand .muted { font-weight: 500; }
+nav a { margin-left: 20px; color: var(--muted); font-size: 14px; }
+nav a:hover { color: var(--fg); text-decoration: none; }
+
+/* hero */
+.hero { padding: 56px 0 30px; }
+.eyebrow { font: 600 11.5px/1 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--accent-2); }
+.hero h1 { font-size: clamp(28px, 4.4vw, 42px); line-height: 1.1; letter-spacing: -.02em; margin: 16px 0 14px; }
+.lede { color: #c3c9d6; font-size: 17px; max-width: 64ch; margin: 0; }
+.lede strong { color: var(--fg); }
+
+/* panels */
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; margin: 18px 0; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.panel-head h2 { font-size: 14px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+
+/* vm cards */
+.vms { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.vm { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--bg-2); }
+.vm .name { font-weight: 600; font-size: 15px; }
+.vm .role { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.vm .meta { display: flex; gap: 14px; margin-top: 12px; font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.running::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+.pill.stopped::before { background: var(--bad); }
+.pill.golden-ok { color: var(--ok); }
+.pill.golden-no { color: var(--warn); }
+.loading { color: var(--muted); }
+
+/* actions */
+.action-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.btn { cursor: pointer; border: 1px solid var(--line); background: var(--bg-2); color: var(--fg); border-radius: 10px; padding: 14px 20px; font: inherit; text-align: left; transition: .15s; }
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: linear-gradient(180deg, #1d6fe0, #1559b8); border-color: #2f7fe6; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn .label { display: block; font-weight: 650; font-size: 15px; }
+.btn .sub { display: block; font-size: 12.5px; color: #cdd9f0; margin-top: 1px; }
+.btn.ghost { padding: 7px 13px; font-size: 13px; border-radius: 8px; }
+.hint { color: var(--muted); font-size: 13.5px; max-width: 42ch; margin: 0; }
+
+/* log */
+.log { background: #090c12; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin: 0; color: #cfe3ff; font: 13px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+.log .ok { color: var(--ok); }
+.log .err { color: var(--bad); }
+.log .dim { color: var(--muted); }
+
+.foot { padding: 30px 0 50px; color: var(--muted); font-size: 13px; }
+@media (max-width: 560px) { .hero { padding-top: 38px; } .action-row { flex-direction: column; align-items: stretch; } }

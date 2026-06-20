@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ISE Lab Demo</title>
+  <meta name="description" content="Drive a real multi-vendor security lab from your browser. Reset wipes it back to a known-good state in ~1–2 minutes." />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <span class="brand">ise<span class="dot">·</span>lab<span class="muted">-demo</span></span>
+      <nav>
+        <a href="https://github.labaccessnow.com/ise-lab-demo/" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/labaccessnow/ise-lab-demo" target="_blank" rel="noopener">Source</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <span class="eyebrow">Live multi-vendor security lab</span>
+      <h1>Drive a real security stack — then wipe it clean.</h1>
+      <p class="lede">
+        Cisco ISE, a Windows domain controller, and a Cisco WLC, running live. You can change things;
+        a one-click <strong>reset</strong> rolls the whole enclave back to a golden snapshot in about a
+        minute or two. Nothing you do here can escape the lab.
+      </p>
+    </section>
+
+    <section class="panel" id="statusPanel" aria-live="polite">
+      <div class="panel-head">
+        <h2>Lab state</h2>
+        <button class="ghost" id="refreshBtn" type="button">Refresh</button>
+      </div>
+      <div class="vms" id="vms"><div class="loading">Loading lab state…</div></div>
+    </section>
+
+    <section class="panel actions">
+      <div class="panel-head"><h2>Actions</h2></div>
+      <div class="action-row">
+        <button class="btn primary" id="resetBtn" type="button">
+          <span class="label">Reset the lab</span>
+          <span class="sub">roll back to the golden snapshot</span>
+        </button>
+        <p class="hint">Resets every enclave VM to its known-good baseline. Safe to run anytime — it's the whole point of the demo.</p>
+      </div>
+    </section>
+
+    <section class="panel log-panel">
+      <div class="panel-head"><h2>Activity</h2><span class="muted" id="sessionTag"></span></div>
+      <pre class="log" id="log">› ready.</pre>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <span>An untrusted visitor cannot escape the portal — the interface is a fixed allowlist, not a shell.
+      <a href="https://github.labaccessnow.com/ise-lab-demo/security/" target="_blank" rel="noopener">How that holds →</a></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
