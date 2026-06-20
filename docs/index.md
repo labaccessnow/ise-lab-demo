@@ -21,12 +21,14 @@ API playground is real, not a read-only tour.
     default visitor action is a **rollback to a golden snapshot (~1–2 minutes)**. Full rebuilds and
     scale-out are still available, but as deliberate admin actions.
 
-!!! info "Status — design and foundations"
-    The architecture on this page is the **full design**. Built today: the Ansible engine, a
-    least-privilege Proxmox token, and the backend runner skeleton (allowlisted actions + guardrails).
-    In progress or planned: the visitor portal, the generated API catalog, the Palo Alto / NAD /
-    endpoint / AP devices, the on-DC certificate authority, and the public edge. Each page flags what's
-    live versus planned.
+!!! info "Status — the core is live"
+    The architecture on this page is the **full design**, and the heart of it is now **running in
+    production**. Live today: the Ansible engine, a least-privilege Proxmox token, the backend runner
+    (allowlisted actions + guardrails), the **golden-snapshot reset**, and the **visitor portal behind a
+    hardened, authenticated public edge** — a visitor can sign in, see live lab state, and reset the
+    enclave to a known-good baseline from the browser. In progress: the generated API catalog (drive the
+    devices' own APIs), a browser-streamed desktop into the enclave (click around the real GUIs), and the
+    Palo Alto / NAD / endpoint / AP build-out. Each page flags what's live versus planned.
 
 ## The three-tier spine
 
