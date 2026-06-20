@@ -1,0 +1,65 @@
+site_name: ise-lab-demo
+site_description: A self-service, multi-vendor security demo lab — rebuild/reset Cisco ISE, a Windows DC, a Cisco WLC, and a Palo Alto firewall, and drive their live APIs from a gated portal.
+site_url: https://github.labaccessnow.com/ise-lab-demo/
+repo_url: https://github.com/labaccessnow/ise-lab-demo
+repo_name: labaccessnow/ise-lab-demo
+edit_uri: edit/main/docs/
+copyright: MIT-licensed.
+
+theme:
+  name: material
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - The automation engine: engine.md
+  - API automation: api.md
+  - Visitor isolation model: security.md
