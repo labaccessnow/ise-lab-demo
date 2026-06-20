@@ -1,0 +1,7 @@
+# Backend (Tier 2) runtime. The Proxmox client is stdlib-only; these are for the
+# API + runner layer (Phase 3+).
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+ansible-runner>=2.3
+# Phase 5 device SDKs (installed in the runner venv): ciscoisesdk, pan-os-python

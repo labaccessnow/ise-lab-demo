@@ -1,0 +1,16 @@
+---
+# Phase 5c — system/admin/EAP certificate rotation + bind (RISKY, gated).
+# Runs ONLY when ise_manage_system_cert=true (default false) AND single-node
+# (--limit), enforced in preflight.yml. STUB to be built out in Phase 5c:
+#   - mode=csr:    generate a CSR on the node (cisco.ise certificate_signing_request),
+#                  fetch it for offline signing by the CA (AD CS / ISE internal CA).
+#   - mode=import: import the signed cert (PEM/PKCS12) + bind selected roles
+#                  (admin/eap/portal/pxgrid/radius/dtls) per the ise_bind_* knobs.
+# See defaults/main.yml for the ise_csr_* / ise_system_cert_* / ise_bind_* options,
+# and verify exact module/param casing against `ansible-doc cisco.ise.<module>`.
+- name: System cert — NOT YET IMPLEMENTED (Phase 5c)
+  ansible.builtin.fail:
+    msg: >-
+      tasks/system_cert.yml is a Phase 5c stub. ise_manage_system_cert is enabled but
+      the CSR/import/bind logic is not built yet — keep ise_manage_system_cert=false
+      until Phase 5c (cert lifecycle).

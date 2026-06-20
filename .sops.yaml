@@ -1,0 +1,6 @@
+# SOPS encrypts anything under secrets/ to THIS project's own age recipient
+# (separate from proxmox-automation). Private key: secrets/age.key (gitignored).
+# Decrypt with: export SOPS_AGE_KEY_FILE="$PWD/secrets/age.key"
+creation_rules:
+  - path_regex: ^secrets/.*
+    age: "age1mzzp873xe87wunv4l9kr3u930wxwt8nmakgxcy8ymzwkr6drxg9spz2nrq"

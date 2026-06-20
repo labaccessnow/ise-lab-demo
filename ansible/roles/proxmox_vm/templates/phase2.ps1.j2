@@ -1,0 +1,22 @@
+# Phase 2 (after promotion reboot, via RunOnce): NTP-as-authoritative, DNS, firewall, marker.
+# Vars: enclave_cidr, ad_domain, ise host ip (0.0.0.0)
+Start-Transcript -Path C:\Windows\Temp\phase2.log -Force
+
+# --- NTP: make this DC an AUTHORITATIVE time source from its LOCAL clock --------
+# (The earlier bug was `manualpeerlist:127.127.1.0` = Unix ntpd syntax, INVALID for
+#  w32tm -> the DC announced "unsynchronized" (LI=3) and ISE rejected it.)
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\W32Time\Parameters" /v Type /t REG_SZ /d NoSync /f | Out-Null
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\W32Time\Config" /v AnnounceFlags /t REG_DWORD /d 5 /f | Out-Null
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\W32Time\TimeProviders\NtpServer" /v Enabled /t REG_DWORD /d 1 /f | Out-Null
+w32tm /config /reliable:yes /update | Out-Null
+Restart-Service w32time
+# allow inbound NTP so clients (ISE) can actually reach us
+New-NetFirewallRule -DisplayName 'NTP-UDP-123-In' -Direction Inbound -Protocol UDP -LocalPort 123 -Action Allow -ErrorAction SilentlyContinue
+
+# --- DNS: reverse zone + pre-create the ISE A/PTR so ISE resolves at its setup --
+Add-DnsServerPrimaryZone -NetworkID '{{ enclave_cidr }}' -ReplicationScope Forest -ErrorAction SilentlyContinue
+Add-DnsServerResourceRecordA -ZoneName '{{ ad_domain }}' -Name 'ise1' -IPv4Address '0.0.0.0' -CreatePtr -ErrorAction SilentlyContinue
+
+Enable-PSRemoting -Force -SkipNetworkProfileCheck -ErrorAction SilentlyContinue
+"DC READY $(Get-Date -Format o)  forest={{ ad_domain }}" | Out-File C:\dc-ready.txt -Encoding ascii
+Stop-Transcript

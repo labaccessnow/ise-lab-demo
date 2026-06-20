@@ -1,0 +1,27 @@
+# --- secrets: NOTHING real is committed (public repo) — see secrets.example.json ---
+secrets/secrets.sops.json
+secrets/age*.key
+secrets/*.agekey
+*.dec.json
+*.decrypted
+.sops-age-key.txt
+.env
+
+# --- python / ansible ---
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.ansible/
+*.retry
+
+# --- node / frontend ---
+node_modules/
+dist/
+.cache/
+
+# --- runtime / local ---
+.env
+*.log
+backend/instance/
+catalog/generated/        # generated API catalog (rebuilt from live specs)

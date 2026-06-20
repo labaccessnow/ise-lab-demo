@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  role_name: cisco_ise
+  author: labaccessnow
+  description: >-
+    Manage Cisco ISE certificate lifecycle over the supported cisco.ise
+    collection (ERS + OpenAPI). Splits safe trusted-store distribution from the
+    risky system-cert rotation/bind; safe-by-default (no changes unless
+    ise_apply_mode=apply), one node at a time for system certs.
+  min_ansible_version: "2.15"
+  platforms:
+    - name: ISE
+      versions: [all]
+  galaxy_tags: [cisco, ise, certificates, pki, security, nac]
+dependencies: []

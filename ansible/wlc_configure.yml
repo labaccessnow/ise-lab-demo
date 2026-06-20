@@ -1,0 +1,99 @@
+---
+# Configure the Catalyst 9800-CL as an ISE NAD (RADIUS client) over SSH, via the
+# cisco.ios CLI collection. This runs AFTER day-0 bootstrap (mgmt IP 0.0.0.0 +
+# SSH up), which is driven over serial by ~/ise-demo/wlc_serial.py — cisco.ios
+# can't connect until the box has an IP and SSH.
+#
+#   ansible-galaxy collection install -r requirements.yml
+#   ansible-playbook -i inventory.yml wlc_configure.yml
+#
+# Pair this with the ISE side: add wlc-demo (0.0.0.0) as a Network Device in
+# ISE using the SAME shared secret (ise_wlc_radius_secret / SOPS cisco_wlc).
+- name: Configure 9800-CL as an ISE RADIUS NAD
+  hosts: wlc-demo
+  gather_facts: false
+  connection: ansible.netcommon.network_cli
+  vars:
+    ansible_host: "{{ wlc_mgmt_ip }}"
+    ansible_network_os: cisco.ios.ios
+    ansible_user: "{{ wlc_admin_user }}"
+    ansible_password: "{{ wlc_admin_password }}"
+    ansible_become: true
+    ansible_become_method: enable
+    ansible_become_password: "{{ wlc_enable_secret }}"
+    ise_ip: "{{ hostvars['ise1'].ip }}"          # single source of truth = ise1 host_vars
+  tasks:
+    - name: AAA model + auth methods + RADIUS server pointing at ISE
+      # ⚠️ ORDER MATTERS: `aaa new-model` alone breaks `enable` (% Error in
+      # authentication) because no enable method is defined -> you get locked out
+      # of privileged EXEC over SSH. Define login/enable/exec methods in the SAME
+      # block so the next task's connection can still enable. (Hit live 2026-06-16.)
+      cisco.ios.ios_config:
+        lines:
+          - aaa new-model
+          - aaa authentication login default local
+          - aaa authentication enable default enable
+          - aaa authorization exec default local
+          - radius server ISE
+          - "address ipv4 {{ ise_ip }} auth-port 1812 acct-port 1813"
+          - "key {{ ise_wlc_radius_secret }}"
+          - exit
+          - aaa group server radius ISE-GROUP
+          - server name ISE
+          - exit
+        save_when: modified
+
+    - name: dot1x auth/authz/accounting method lists -> ISE
+      cisco.ios.ios_config:
+        lines:
+          - aaa authentication dot1x ISE-DOT1X group ISE-GROUP
+          - aaa authorization network ISE-DOT1X group ISE-GROUP
+          - aaa accounting identity ISE-ACCT start-stop group ISE-GROUP
+        save_when: modified
+
+    - name: RADIUS attributes + CoA (dynamic-author) so ISE can push reauth/CoA
+      cisco.ios.ios_config:
+        lines:
+          - radius-server attribute 6 on-for-login-auth
+          - radius-server attribute 8 include-in-access-req
+          - radius-server attribute 25 access-request include
+          - aaa server radius dynamic-author
+          - "client {{ ise_ip }} server-key {{ ise_wlc_radius_secret }}"
+          - auth-type any
+          - exit
+        save_when: modified
+
+    # --- Smoke test: ISE should see an Access-Request (will Reject a fake user,
+    #     which still proves NAD<->ISE RADIUS reachability + shared-secret match) ---
+    - name: test aaa against ISE
+      cisco.ios.ios_command:
+        commands:
+          - "test aaa group ISE-GROUP testuser BadPass123 new-code"
+      register: _testaaa
+      failed_when: false
+    - name: show test aaa result
+      ansible.builtin.debug:
+        var: _testaaa.stdout_lines
+
+# ============================================================================
+# AP + dot1x WLAN — bring a Cisco 2802i in as a real 802.1X test AP.
+# (Validate the exact wireless CLI against the live 9800 before trusting it —
+#  written from docs, not yet run; the AAA/RADIUS block above IS verified-shape.)
+#
+# Physical / join prerequisites (one-time, outside Ansible):
+#   1. CONVERT the 2802i ME->CAPWAP: it currently runs a Mobility-Express image on
+#      LabME. From the AP console/U-Boot, `ap-type capwap` (reverse of the ME
+#      conversion in memory ref-ap-lightweight-to-me-conversion) so it boots a
+#      lightweight CAPWAP image. The 9800 pushes the matching AP image on join.
+#   2. CABLE it onto VLAN 1800: plug the AP into a CRS317 port in vnet v1800 (the
+#      enclave L2, gw 0.0.0.0) so it can reach the WLC mgmt IP 0.0.0.0.
+#   3. AP gets an IP on 0.0.0.0/24 (dc-demo DHCP scope, or static) + DISCOVERS the
+#      WLC via DHCP option 43 = 0.0.0.0, DNS CISCO-CAPWAP-CONTROLLER.demo.lab,
+#      or manual on the AP CLI: `capwap ap primary-base wlc-demo 0.0.0.0`.
+#
+# WLC-side config to add here once the box is live (country MUST be set or APs
+# won't join): wireless country US; an AP join profile; a dot1x `wlan` bound to
+# `aaa authentication dot1x ISE-DOT1X` + `aaa-override`; a `wireless profile policy`;
+# and a `wireless tag policy` mapping WLAN->policy, applied to the AP.
+#   ISE side: a Wireless-802.1X policy set keyed on this NAD; an authz result.
+# ============================================================================

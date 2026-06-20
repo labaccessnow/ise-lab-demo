@@ -1,0 +1,15 @@
+---
+# Cross-device certificate lifecycle (Phase 5c).
+# SAFE by default: the cisco_ise role runs in check/dry-run mode unless you pass
+#   -e ise_apply_mode=apply
+# System-cert rotation is additionally gated (ise_manage_system_cert) and forces a
+# single-node --limit. WLC + Palo Alto cert renewal get added here in Phase 5c.
+#
+# Run from the ansible/ dir:
+#   ansible-playbook playbooks/cert_lifecycle.yml                 # dry run
+#   ansible-playbook playbooks/cert_lifecycle.yml -e ise_apply_mode=apply --limit ise1
+- name: ISE certificate lifecycle (trusted store + gated system cert)
+  hosts: cisco_ise
+  gather_facts: false
+  roles:
+    - role: cisco_ise

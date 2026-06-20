@@ -1,0 +1,53 @@
+---
+# ============================================================================
+# Shared settings for the isolated `demo.lab` ISE enclave (VLAN 1800 / SSD4).
+# One role (proxmox_vm) provisions EITHER VM from its host_vars `vm_spec`.
+# See ../README.md.  Memory: proj-ise-demo-lab.
+# ============================================================================
+
+# --- Proxmox target (all VM creates are delegated to localhost via the API) ---
+proxmox_api_host: "{{ lookup('env', 'PVE_HOST') | default('pve.lab.example', true) }}"
+proxmox_node:     "{{ lookup('env', 'PVE_NODE') | default('pve', true) }}"   # export PVE_HOST/PVE_NODE (see .env.example)
+proxmox_storage:  "SSD4"             # reserved lab tier (ISE + Win DC)
+proxmox_iso_store: "SSD4"
+
+# --- enclave network (nothing here touches dc1/dc2 or production) ---
+enclave_vlan: 1800
+enclave_bridge: "v1800"              # Proxmox SDN vnet on vmbr10gD -> CRS317
+enclave_cidr: "0.0.0.0/24"
+enclave_netmask: "255.255.255.0"
+enclave_gateway: "0.0.0.0"         # CRS317 SVI vlan1800 (insidedmz VRF)
+
+# --- AD / DNS / NTP all live on the demo DC (isolated forest) ---
+ad_domain: "demo.lab"
+ad_netbios: "DEMO"
+dc_ip: "0.0.0.0"
+dns_server: "0.0.0.0"
+ntp_server: "0.0.0.0"
+timezone_win: "UTC"
+timezone_ise: "UTC"
+
+# --- secrets pulled from the repo SOPS store (adjust key paths to your schema) -
+# _sops decrypts once; reference sub-keys below. Requires `sops` on PATH + age key.
+_sops: "{{ lookup('pipe', 'sops -d ' + playbook_dir + '/../secrets/secrets.sops.json') | from_json }}"
+
+# Proxmox API token (user james@pve!automation per memory ref-... ). Adjust paths:
+proxmox_api_user:         "{{ _sops.proxmox.user }}"          # james@pve
+proxmox_api_token_id:     "{{ _sops.proxmox.token_name }}"    # automation
+proxmox_api_token_secret: "{{ _sops.proxmox.token_value }}"
+
+# Windows DC creds (SOPS key windc_demo, created 2026-06-15)
+win_admin_password: "{{ _sops.windc_demo.local_admin_password }}"
+win_dsrm_password:  "{{ _sops.windc_demo.dsrm_password }}"
+
+# Cisco ISE CLI admin (SOPS key cisco_ise)
+ise_cli_user:     "{{ _sops.cisco_ise.cli_user | default('admin') }}"
+ise_cli_password: "{{ _sops.cisco_ise.cli_password }}"
+
+# Cisco 9800-CL WLC admin (SOPS key cisco_wlc — create alongside the build)
+wlc_admin_user:     "{{ _sops.cisco_wlc.admin_user | default('admin') }}"
+wlc_admin_password: "{{ _sops.cisco_wlc.admin_password }}"
+wlc_enable_secret:  "{{ _sops.cisco_wlc.enable_secret | default(_sops.cisco_wlc.admin_password) }}"
+wlc_mgmt_ip:        "0.0.0.0"
+# RADIUS shared secret between the WLC (NAD) and ISE — the SAME value goes in both
+ise_wlc_radius_secret: "{{ _sops.cisco_wlc.radius_secret }}"

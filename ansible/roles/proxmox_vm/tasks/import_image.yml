@@ -1,0 +1,43 @@
+---
+# Import a prebuilt qcow2 (the Catalyst 9800-CL image) as the VM's scsi0 boot
+# disk. Runs `qm` on the PVE host. Idempotent: skips if scsi0 is already attached.
+# Prereq: the image is staged at /mnt/pve/{{ proxmox_iso_store }}/template/iso/<boot_image>.
+
+- name: Check whether the boot disk is already attached
+  delegate_to: "{{ proxmox_api_host }}"
+  become: true
+  ansible.builtin.command: "qm config {{ vm_spec.vmid }}"
+  register: _vmcfg
+  changed_when: false
+
+- name: Confirm the qcow2 image is staged on the PVE host
+  delegate_to: "{{ proxmox_api_host }}"
+  become: true
+  ansible.builtin.stat:
+    path: "/mnt/pve/{{ proxmox_iso_store }}/template/iso/{{ vm_spec.boot_image }}"
+  register: _img
+  when: "'scsi0:' not in _vmcfg.stdout"
+
+- name: Fail with a clear hint if the image is missing
+  when:
+    - "'scsi0:' not in _vmcfg.stdout"
+    - not _img.stat.exists
+  ansible.builtin.fail:
+    msg: >-
+      9800-CL image not found at /mnt/pve/{{ proxmox_iso_store }}/template/iso/{{ vm_spec.boot_image }}.
+      Download it from software.cisco.com (Wireless -> Catalyst 9800-CL -> IOS-XE 17.12.5 -> KVM qcow2)
+      and place it there, then re-run.
+
+- name: Import the qcow2 as an unused disk + attach as scsi0 + set boot order
+  when: "'scsi0:' not in _vmcfg.stdout"
+  delegate_to: "{{ proxmox_api_host }}"
+  become: true
+  ansible.builtin.shell: |
+    set -e
+    qm importdisk {{ vm_spec.vmid }} \
+      /mnt/pve/{{ proxmox_iso_store }}/template/iso/{{ vm_spec.boot_image }} \
+      {{ proxmox_storage }} --format qcow2
+    qm set {{ vm_spec.vmid }} --scsi0 {{ proxmox_storage }}:vm-{{ vm_spec.vmid }}-disk-0,ssd=1
+    qm set {{ vm_spec.vmid }} --boot order=scsi0
+  register: _import
+  changed_when: _import.rc == 0

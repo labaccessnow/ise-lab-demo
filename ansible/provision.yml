@@ -1,0 +1,15 @@
+---
+# Provision the demo.lab enclave VMs on Proxmox. ONE role (proxmox_vm) builds
+# either VM from its host_vars `vm_spec`. Run dc-demo first (ISE needs its DNS).
+#
+#   ansible-playbook -i inventory.yml provision.yml --limit dc-demo
+#   ... wait for the DC to promote demo.lab + serve DNS ...
+#   ansible-playbook -i inventory.yml provision.yml --limit ise1
+#
+- name: Provision demo.lab enclave VM(s)
+  hosts: enclave
+  gather_facts: false
+  connection: local          # all work is delegated to localhost / the PVE API
+  serial: 1                  # one host at a time (keeps DC-before-ISE ordering)
+  roles:
+    - proxmox_vm

@@ -1,0 +1,33 @@
+---
+# Cisco ISE 3.4 node for the demo.lab enclave.
+role: ise
+ip: "0.0.0.0"
+
+# Same vm_spec schema as dc-demo -> the proxmox_vm role provisions either one.
+vm_spec:
+  vmid: 125
+  name: "ise1"
+  cores: 4
+  memory: 16384            # ISE eval installer hard-checks RAM/CPU/disk or it aborts
+  bios: "seabios"
+  ostype: "l26"
+  scsihw: "virtio-scsi-single"
+  disk_bus: "scsi"          # scsi0 (virtio-scsi); SSD4 clears ISE's 50/300 MB-s disk gate
+  disk_gb: 300              # ISE 3.4 minimum
+  nic_model: "e1000"        # e1000 detected natively; virtio NIC is NOT seen by ISE installer
+  install_iso: "ise-3.4.0.608b.SPA.x86_64.iso"
+  build_answer_iso: false   # ISE has no autounattend; setup wizard is driven over serial
+  serial: true              # add serial0 socket so the setup wizard is drivable via qm terminal
+  boot_order: "ide2;scsi0"  # ISO first to install; MUST detach ISO + set order=scsi0 after install
+
+# ISE first-boot `setup` wizard answers (driven by ~/ise-demo/ise_serial.py, not Ansible).
+ise_setup:
+  hostname: "ise1"
+  ip: "0.0.0.0"
+  netmask: "255.255.255.0"
+  gateway: "0.0.0.0"
+  dns_domain: "demo.lab"
+  nameserver: "0.0.0.0"
+  ntp_server: "0.0.0.0"
+  timezone: "UTC"
+  enable_ssh: true

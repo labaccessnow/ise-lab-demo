@@ -1,0 +1,42 @@
+---
+# Trusted store distribution — safe + idempotent. Ensures each CA/trusted cert
+# in ise_trusted_certificates is present with the requested trust flags.
+#
+# NB: exact param names track the installed cisco.ise version — verify against
+# `ansible-doc cisco.ise.trusted_certificate_import` after pinning the collection.
+# (The import endpoint is OpenAPI; older collections used different casing.)
+
+- name: List existing trusted certs (read-only)
+  cisco.ise.trusted_certificate_info:
+  register: ise_trusted_existing
+
+- name: Report planned trusted-cert changes (dry run)
+  when: ise_apply_mode != "apply"
+  ansible.builtin.debug:
+    msg: >-
+      [dry run] would ensure {{ ise_trusted_certificates | length }} trusted cert(s):
+      {{ ise_trusted_certificates | map(attribute='name') | list }}.
+      Re-run with -e ise_apply_mode=apply to import.
+
+- name: Import / ensure trusted certificates
+  when: ise_apply_mode == "apply"
+  loop: "{{ ise_trusted_certificates }}"
+  loop_control:
+    label: "{{ item.name }}"
+  cisco.ise.trusted_certificate_import:
+    name: "{{ item.name }}"
+    description: "{{ item.description | default('') }}"
+    data: "{{ lookup('ansible.builtin.file', item.path) }}"
+    allowBasicConstraintCAFalse: "{{ item.allow_basic_constraint_ca_false | default(false) }}"
+    trustForIseAuth: "{{ item.trust_for_ise_auth | default(true) }}"
+    trustForClientAuth: "{{ item.trust_for_client_auth | default(true) }}"
+    trustForCertificateBasedAdminAuth: "{{ item.trust_for_certificate_based_admin_auth | default(false) }}"
+    trustForCiscoServicesAuth: "{{ item.trust_for_cisco_services | default(false) }}"
+    enableOCSPValidation: "{{ item.enable_ocsp | default(false) }}"
+    validateCertificateExtensions: "{{ item.validate_extensions | default(true) }}"
+  register: ise_trusted_result
+
+- name: Summarize trusted-cert apply
+  when: ise_apply_mode == "apply"
+  ansible.builtin.debug:
+    msg: "Trusted store: processed {{ ise_trusted_certificates | length }} cert(s) on {{ ise_hostname }}."

@@ -1,0 +1,93 @@
+---
+# Reusable: create ONE Proxmox VM from `vm_spec`. Three flavours:
+#   - Windows DC : empty disk + install ISO + answer ISO (build_answer_iso)
+#   - Cisco ISE  : empty disk + install ISO (serial-driven setup)
+#   - 9800-CL WLC: NO install ISO -- boots a prebuilt qcow2 imported as scsi0 (vm_spec.boot_image)
+# All API calls run on the controller (localhost), targeting the PVE node.
+
+- name: Build disk parameter ({{ vm_spec.disk_bus }})
+  when: vm_spec.boot_image is not defined        # image-boot VMs import their disk instead
+  ansible.builtin.set_fact:
+    _disk_key: "{{ vm_spec.disk_bus }}0"
+    # per-host vm_storage overrides the shared proxmox_storage (e.g. WLC disk -> SSD1)
+    _disk_val: "{{ vm_storage | default(proxmox_storage) }}:{{ vm_spec.disk_gb }},format=qcow2,ssd=1"
+
+- name: Assemble CD-ROM drives (install ISO always; answer + virtio for Windows)
+  when: vm_spec.boot_image is not defined        # no install ISO when booting a prebuilt qcow2
+  ansible.builtin.set_fact:
+    _ide: >-
+      {{ {'ide2': proxmox_iso_store ~ ':iso/' ~ vm_spec.install_iso ~ ',media=cdrom'}
+         | combine({'ide0': proxmox_iso_store ~ ':iso/' ~ vm_spec.name ~ '-answer.iso,media=cdrom'} if vm_spec.build_answer_iso else {})
+         | combine({'ide1': proxmox_iso_store ~ ':iso/virtio-win.iso,media=cdrom'} if vm_spec.build_answer_iso else {}) }}
+
+# --- Windows only: render answer files + build the labelled answer ISO ---------
+- name: Render Windows unattend + post-install scripts
+  when: vm_spec.build_answer_iso | default(false)
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/tmp/{{ vm_spec.name }}-answer/{{ item }}"
+    mode: "0644"
+  loop: [autounattend.xml, setup-dc.ps1, phase2.ps1]
+
+- name: Build + upload the answer ISO (label WINANSWER) to the PVE iso store
+  when: vm_spec.build_answer_iso | default(false)
+  delegate_to: "{{ proxmox_api_host }}"   # genisoimage lives on the PVE host
+  become: true
+  ansible.builtin.shell: |
+    set -e
+    genisoimage -quiet -o /mnt/pve/{{ proxmox_iso_store }}/template/iso/{{ vm_spec.name }}-answer.iso \
+      -V WINANSWER -J -r /tmp/{{ vm_spec.name }}-answer/
+  args: { creates: "/mnt/pve/{{ proxmox_iso_store }}/template/iso/{{ vm_spec.name }}-answer.iso" }
+
+# --- Create the VM (identical task for both; only vm_spec differs) -------------
+- name: "Create VM {{ vm_spec.vmid }} ({{ vm_spec.name }})"
+  delegate_to: localhost
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ vm_spec.vmid }}"
+    name: "{{ vm_spec.name }}"
+    cores: "{{ vm_spec.cores }}"
+    sockets: 1
+    cpu: host
+    memory: "{{ vm_spec.memory }}"
+    balloon: 0
+    bios: "{{ vm_spec.bios }}"
+    ostype: "{{ vm_spec.ostype }}"
+    scsihw: "{{ vm_spec.scsihw }}"
+    scsi: "{{ {_disk_key: _disk_val} if (vm_spec.boot_image is not defined and vm_spec.disk_bus == 'scsi') else omit }}"
+    sata: "{{ {_disk_key: _disk_val} if (vm_spec.boot_image is not defined and vm_spec.disk_bus == 'sata') else omit }}"
+    ide: "{{ _ide | default(omit) }}"
+    net: { net0: "{{ vm_spec.nic_model }},bridge={{ enclave_bridge }}" }
+    serial: "{{ {'serial0': 'socket'} if (vm_spec.serial | default(false)) else omit }}"
+    boot: "order={{ vm_spec.boot_order }}"
+    agent: "{{ 'enabled=1' if vm_spec.build_answer_iso | default(false) else omit }}"
+    onboot: false
+    state: present
+
+# --- 9800-CL only: import the downloaded qcow2 as the scsi0 boot disk ----------
+- name: Import qcow2 boot image (9800-CL)
+  when: vm_spec.boot_image is defined
+  ansible.builtin.include_tasks: import_image.yml
+
+- name: Start the VM
+  delegate_to: localhost
+  community.general.proxmox_kvm:
+    api_host: "{{ proxmox_api_host }}"
+    api_user: "{{ proxmox_api_user }}"
+    api_token_id: "{{ proxmox_api_token_id }}"
+    api_token_secret: "{{ proxmox_api_token_secret }}"
+    node: "{{ proxmox_node }}"
+    vmid: "{{ vm_spec.vmid }}"
+    state: started
+
+- name: Handoff notes
+  ansible.builtin.debug:
+    msg: >-
+      {{ vm_spec.name }} ({{ vm_spec.vmid }}) created + started.
+      {% if role == 'windc' %}Windows installs unattended -> promotes {{ ad_domain }}, then DETACH ide2 is not needed (no ISO trap on Windows).{% endif %}
+      {% if role == 'ise' %}AFTER the ISE OS install reboots: `qm set {{ vm_spec.vmid }} --delete ide2 --boot order=scsi0` (avoids the ISOLINUX auto-reinstall trap), then drive setup with ~/ise-demo/ise_serial.py.{% endif %}
+      {% if role == 'wlc' %}9800-CL ISO installing onto scsi0 (disk on {{ vm_storage | default(proxmox_storage) }}). AFTER it installs + reboots, detach the ISO: `qm set {{ vm_spec.vmid }} --delete ide2 --boot order=scsi0`. Then drive day-0 over serial with ~/ise-demo/wlc_serial.py (mgmt IP {{ ip }} + SSH), then `ansible-playbook -i inventory.yml wlc_configure.yml` (cisco.ios) to wire RADIUS to ISE.{% endif %}

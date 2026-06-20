@@ -1,0 +1,40 @@
+---
+# cisco_ise role — entry point. Wraps everything in a block that sets
+# `module_defaults` for the whole cisco.ise collection, so every module inherits
+# the connection params without repeating them. Runs on the control node against
+# the ISE API (connection: local, set in group_vars/cisco_ise.yml).
+#
+# Flow:
+#   preflight       -> validate vars + creds, confirm node reachable, gate checks
+#   trusted_certs   -> (safe) ensure CA/trusted certs present       [ise_manage_trusted]
+#   system_cert     -> (RISKY) CSR generate OR signed-cert import   [ise_manage_system_cert]
+#
+# Nothing mutates unless ise_apply_mode == "apply".
+
+- name: cisco_ise certificate management
+  # cisco.ise (3.2.0) defines NO `all` action group, so connection params are set
+  # per-module via a YAML anchor. Add new cisco.ise.* modules here as the role grows
+  # (e.g. system_certificate / certificate_signing_request in tasks/system_cert.yml).
+  module_defaults:
+    cisco.ise.node_deployment_info: &ise_conn
+      ise_hostname: "{{ ise_hostname }}"
+      ise_username: "{{ ise_username }}"
+      ise_password: "{{ ise_password }}"
+      ise_verify: "{{ ise_verify }}"
+      ise_version: "{{ ise_version }}"
+      ise_uses_api_gateway: "{{ ise_uses_api_gateway }}"
+      ise_debug: "{{ ise_debug }}"
+    cisco.ise.trusted_certificate_info: *ise_conn
+    cisco.ise.trusted_certificate_import: *ise_conn
+  block:
+
+    - name: Preflight — validate vars, creds, and gates
+      ansible.builtin.import_tasks: preflight.yml
+
+    - name: Trusted store — distribute CA/trusted certificates
+      ansible.builtin.import_tasks: trusted_certs.yml
+      when: ise_manage_trusted | bool
+
+    - name: System cert — generate CSR or import + bind (gated, single node)
+      ansible.builtin.import_tasks: system_cert.yml
+      when: ise_manage_system_cert | bool

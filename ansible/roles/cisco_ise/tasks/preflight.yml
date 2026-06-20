@@ -1,0 +1,49 @@
+---
+# Preflight: fail fast and loudly before touching certs.
+
+- name: Assert connection creds are present
+  ansible.builtin.assert:
+    that:
+      - ise_username | length > 0
+      - ise_password | length > 0
+    fail_msg: >-
+      ise_username / ise_password are empty. Put the ERS admin creds in vault
+      (from SOPS key `cisco_ise`) — group_vars/cisco_ise.yml or -e. Never inline.
+    quiet: true
+
+- name: Assert ERS is reachable and creds work (read-only node list)
+  cisco.ise.node_deployment_info:
+  register: ise_nodes
+  # Pure read; safe in check mode. If this fails, ERS is off or creds/TLS are wrong.
+
+- name: Show deployment + effective apply mode
+  ansible.builtin.debug:
+    msg:
+      - "ISE PAN: {{ ise_hostname }} | version {{ ise_version }} | nodes: {{ ise_nodes.ise_response | map(attribute='hostname') | list | default([]) }}"
+      - "apply mode: {{ ise_apply_mode }}  ({{ 'CHANGES WILL BE MADE' if ise_apply_mode == 'apply' else 'dry run — no changes' }})"
+      - "trusted store: {{ 'manage' if ise_manage_trusted else 'skip' }} | system cert: {{ 'manage' if ise_manage_system_cert else 'skip' }}"
+
+# --- system-cert safety rails -------------------------------------------
+- name: Guard — system cert work targets exactly one named node
+  when: ise_manage_system_cert | bool
+  ansible.builtin.assert:
+    that:
+      - ise_system_cert_node | length > 0
+      - ansible_play_hosts_all | length == 1
+    fail_msg: >-
+      System-cert rotation is single-node by policy. Set ise_system_cert_node and
+      run with --limit <one-node>. Batching admin/EAP cert binds is how you lock
+      yourself out of the GUI / drop RADIUS deployment-wide.
+    quiet: true
+
+- name: Guard — refuse to bind admin+eap together blindly without replace
+  when:
+    - ise_manage_system_cert | bool
+    - ise_bind_admin | bool
+    - ise_bind_eap | bool
+    - not (ise_allow_replace_cert | bool)
+  ansible.builtin.fail:
+    msg: >-
+      Binding both admin and eap with ise_allow_replace_cert=false will fail the
+      import (existing roles still bound). Set ise_allow_replace_cert=true and be
+      sure you can reach the node's console before applying.

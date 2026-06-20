@@ -1,0 +1,41 @@
+---
+# Cisco Catalyst 9800-CL virtual WLC for the demo.lab enclave — the ISE NAD
+# (RADIUS client) for 802.1X / MAB testing. IOS-XE 17.12.7a (current Gold Star
+# in the 17.12 train; supports the 2802i Wave-2 AP), cisco.ios CLI mgmt.
+role: wlc
+ip: "0.0.0.0"
+
+# Disk on SSD4 (default proxmox_storage) — same tier as ise1/dc-demo. SSD4 has
+# ~281 GB actually free; the 25 GB WLC disk is trivial. (The role supports a
+# per-host `vm_storage` override -> SSD1/2/3 if SSD4 ever gets tight.)
+
+vm_spec:
+  vmid: 130
+  name: "wlc-demo"
+  cores: 4                    # 9800-CL "Small" profile (4 vCPU / 8 GB)
+  memory: 8192
+  bios: "seabios"
+  ostype: "l26"               # IOS-XE is x86 Linux-based
+  scsihw: "virtio-scsi-single"
+  disk_bus: "scsi"            # scsi0 = empty target disk the ISO installs onto
+  disk_gb: 25                 # 9800-CL needs >=16 GB; 25 leaves headroom
+  # Cisco posts the 9800-CL for KVM as an ISO (no standalone qcow2 for this build).
+  # Boot the ISO, it installs IOS-XE onto scsi0, then day-0 over serial.
+  # Download from CCO (Catalyst 9800-CL -> IOS XE 17.12.7a -> the .iso) and stage
+  # at /mnt/pve/SSD4/template/iso/ on the PVE host. Match this to the EXACT name.
+  install_iso: "C9800-CL-universalk9.17.12.07a.iso"
+  nic_model: "virtio"         # 9800-CL KVM guide: virtio vNIC (single iface = wireless mgmt)
+  serial: true                # serial0 socket -> drive install + day-0 via qm terminal
+  boot_order: "ide2;scsi0"    # ISO first to install, disk after (detach ISO post-install)
+  build_answer_iso: false
+
+# Day-0 wizard answers (driven over serial by ~/ise-demo/wlc_serial.py, NOT Ansible —
+# cisco.ios can't connect until day-0 sets the mgmt IP + enables SSH).
+wlc_setup:
+  hostname: "wlc-demo"
+  mgmt_ip: "0.0.0.0"
+  netmask: "255.255.255.0"
+  gateway: "0.0.0.0"
+  country: "US"
+  deployment_mode: "local"    # local switching/central; fine for a lab NAD
+  enable_ssh: true

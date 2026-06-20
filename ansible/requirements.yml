@@ -1,0 +1,9 @@
+# Install with: ansible-galaxy collection install -r requirements.yml
+# Python deps (pip, in the runner venv): ciscoisesdk (cisco.ise), pan-os-python (paloaltonetworks.panos).
+collections:
+  - name: community.general   # proxmox_kvm — VM provisioning (provision.yml)
+  - name: cisco.ios           # 9800-CL WLC config over SSH CLI (wlc_configure.yml) + RESTCONF
+    version: ">=5.0.0"
+  - name: ansible.netcommon   # network_cli + restconf connection plugins
+  - name: cisco.ise           # ISE ERS + OpenAPI (cisco_ise cert role + API catalog) — needs ciscoisesdk
+  - name: paloaltonetworks.panos  # Palo Alto VM-Series config + certs — needs pan-os-python

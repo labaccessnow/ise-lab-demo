@@ -1,0 +1,101 @@
+---
+# ============================================================================
+# cisco_ise role — default vars (override per-node in host_vars/iseN.yml)
+# ============================================================================
+# Certificate lifecycle for Cisco ISE over the supported `cisco.ise` collection
+# (ERS + OpenAPI, via the ciscoisesdk pip dep). Two independent concerns,
+# deliberately split because they carry very different blast radius:
+#
+#   1. TRUSTED store distribution  (safe, idempotent)  -> tasks/trusted_certs.yml
+#   2. SYSTEM cert rotation+bind   (RISKY, gated)       -> tasks/system_cert.yml
+#
+# SAFE BY DEFAULT: the role reads/asserts but changes nothing until you set
+# ise_apply_mode=apply. System-cert work is additionally gated behind its own
+# flag and refuses to run against more than one node at a time. This mirrors the
+# edgerouter role's "render by default, explicit apply" stance.
+# ----------------------------------------------------------------------------
+
+# --- connection (ERS/OpenAPI) --------------------------------------------
+# These feed `module_defaults: group/cisco.ise.all` in tasks/main.yml, so every
+# cisco.ise.* module inherits them. Creds come from VAULT/SOPS — never inline.
+# Pull them from secrets.sops.json key `cisco_ise` (admin ERS account) into
+# group_vars/cisco_ise.yml (vaulted) or pass with -e.
+ise_hostname: "{{ inventory_hostname }}"     # PAN / mgmt FQDN or IP the API answers on
+ise_username: ""                             # ERS admin (vault)
+ise_password: ""                             # ERS admin pw (vault)
+ise_verify: true                             # verify the PAN's TLS cert (set false only to bootstrap)
+ise_version: "3.4.0.608"                     # match your deployed ISE; the SDK keys behavior off this
+ise_uses_api_gateway: false                  # true if you front ISE with the API gateway
+ise_debug: false
+
+# --- apply gate -----------------------------------------------------------
+# check  = default: gather + assert + diff, make NO changes (dry run).
+# apply  = actually import/bind certificates.
+ise_apply_mode: "check"
+
+# --- (1) trusted certificate store ---------------------------------------
+# Declarative CA/trusted-cert distribution. Safe + idempotent — fine to run
+# fleet-wide. Each entry: a CA/chain cert to ensure present in the trust store.
+ise_manage_trusted: true
+# List of:
+#   - name:        "Lab Root CA 2026"          # friendly name in ISE
+#     path:        "files/lab-root-ca.pem"     # PEM on the control node (templated/looked up)
+#     description: "ad.labaccessnow.com offline root"
+#     trust_for_ise_auth:        true   # trust for authentication within ISE
+#     trust_for_client_auth:     true   # trust for client/EAP-TLS auth
+#     trust_for_certificate_based_admin_auth: false
+#     trust_for_cisco_services:  false
+#     allow_basic_constraint_ca_false: false
+#     enable_ocsp:               false
+ise_trusted_certificates: []
+
+# --- (2) system certificate (admin/EAP/portal/pxGrid/RADIUS) -------------
+# DANGEROUS: a bad admin/EAP bind can lock you out of the GUI / drop RADIUS.
+# OFF by default. Turn on per-run, target ONE node, prefer SCEP/EST for hands-off
+# renewal where you can (see README). The role enforces single-node when on.
+ise_manage_system_cert: false
+
+# Which node the system cert is for (must be a real node FQDN in the deployment).
+ise_system_cert_node: ""
+
+# How to obtain the cert. Recommended flow:
+#   csr     -> role generates a CSR on the node, you sign it with your CA offline,
+#              then re-run with mode=import providing the signed cert.
+#   import  -> import an externally-produced cert + key (PKCS#12 or PEM+key).
+ise_system_cert_mode: "csr"          # "csr" | "import"
+
+# CSR generation (mode=csr) ------------------------------------------------
+ise_csr_common_name: "{{ ise_system_cert_node }}"
+ise_csr_san_dns: []                  # extra SAN DNS names
+ise_csr_san_ip: []                   # extra SAN IPs
+ise_csr_key_type: "RSA"              # RSA | ECDSA
+ise_csr_key_length: 2048             # 2048/4096 (RSA) — ISE rejects <2048
+ise_csr_digest: "SHA-256"
+ise_csr_subject_org: "labaccessnow"
+ise_csr_subject_ou: "Lab"
+ise_csr_subject_city: ""
+ise_csr_subject_state: ""
+ise_csr_subject_country: "US"
+ise_csr_allow_wildcard: false
+# Roles the eventual cert will be bound to — also stamped on the CSR usage.
+ise_csr_used_for: ["MULTI_USE"]      # or specific: ADMIN / EAP_AUTH / PORTAL / PXGRID / DTLS_AUTH / SAML
+
+# Import (mode=import) -----------------------------------------------------
+ise_system_cert_path: ""             # signed cert PEM on the control node
+ise_system_cert_key_path: ""         # private key PEM (omit if it stayed on the node via CSR flow)
+ise_system_cert_key_password: ""     # key passphrase (vault) — "" if unencrypted
+# Role bindings to APPLY on import. Keep these conservative — admin/eap are the
+# ones that lock you out. Default binds NOTHING; you opt in explicitly.
+ise_bind_admin:   false
+ise_bind_eap:     false
+ise_bind_portal:  false
+ise_bind_pxgrid:  false
+ise_bind_radius:  false
+ise_bind_dtls:    false
+ise_portal_group_tag: "Default Portal Certificate Group"
+# Safety toggles passed to the import (leave strict unless you know why).
+ise_allow_replace_cert: true         # replace the existing cert with same CN/role
+ise_allow_out_of_date:  false
+ise_allow_sha1:         false
+ise_allow_wildcard_import: false
+ise_validate_extensions: true

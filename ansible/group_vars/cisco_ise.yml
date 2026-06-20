@@ -1,0 +1,18 @@
+---
+# Connection/API context for the cisco_ise cert-lifecycle role (ERS + OpenAPI).
+# Applied to the `cisco_ise` inventory group. The role runs on the CONTROL NODE
+# (connection: local) against the ISE REST API, NOT over SSH to the node.
+ansible_connection: local
+
+ise_hostname: "0.0.0.0"     # ISE PAN mgmt IP the ERS/OpenAPI answer on (ise1.demo.lab)
+
+# ERS/OpenAPI admin account. Created in Phase 5a — a Playwright play enables
+# ERS + OpenAPI (GUI-only toggle) and makes a read-only RBAC admin + an ERS
+# Operator account, stored in SOPS key `cisco_ise`. Fallback to the GUI admin
+# only to bootstrap.
+ise_username: "{{ _sops.cisco_ise.ers_user | default('ersadmin') }}"
+ise_password: "{{ _sops.cisco_ise.ers_password | default(_sops.cisco_ise.gui_password | default('')) }}"
+
+ise_verify: false              # demo enclave; flip true once the ISE admin cert is trusted on the runner
+ise_version: "3.4.0.608"
+ise_uses_api_gateway: false

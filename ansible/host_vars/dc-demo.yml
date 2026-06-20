@@ -1,0 +1,25 @@
+---
+# Windows Server 2025 Domain Controller for the demo.lab enclave.
+role: windc
+ip: "0.0.0.0"
+
+# The reusable proxmox_vm role consumes this dict (same schema as ise1).
+vm_spec:
+  vmid: 126
+  name: "dc-demo"
+  cores: 4
+  memory: 8192
+  bios: "seabios"            # seabios + SATA + e1000 = all native Windows drivers, no virtio inject
+  ostype: "win11"            # Proxmox enlightenments for Server 2022/2025
+  scsihw: "virtio-scsi-single"
+  disk_bus: "sata"           # sata0
+  disk_gb: 80
+  nic_model: "e1000"
+  install_iso: "en-us_windows_server_2025_x64_dvd_b7ec10f3.iso"
+  # answer ISO is built + attached by the playbook (Windows only)
+  build_answer_iso: true
+  boot_order: "ide2;sata0"   # CD first for install; detach + flip to sata0 after (see README)
+
+# Windows image edition (exact /IMAGE/NAME from install.wim, index 2 = Standard Desktop)
+win_image_name: "Windows Server 2025 SERVERSTANDARD"
+win_hostname: "dc-demo"

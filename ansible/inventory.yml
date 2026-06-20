@@ -1,0 +1,14 @@
+---
+# demo.lab enclave. Hosts are NOT SSH-reachable (isolated VLAN 1800) — provisioning
+# is delegated to the PVE API / localhost, so no connection to them is needed.
+# dc-demo is listed first so `provision.yml` (serial: 1) builds it before ise1.
+all:
+  children:
+    enclave:
+      hosts:
+        dc-demo: {}      # Windows Server 2025 DC  (0.0.0.0)  -- build 1st (DNS)
+        ise1: {}         # Cisco ISE 3.4           (0.0.0.0)  -- build 2nd
+        wlc-demo: {}     # Cisco Catalyst 9800-CL  (0.0.0.0)  -- build 3rd (ISE NAD)
+    cisco_ise:           # ISE API target for the cert-lifecycle role (control-node-local vs the ERS/OpenAPI)
+      hosts:
+        ise1: {}         # same node, second hat: API automation + cert lifecycle (see group_vars/cisco_ise.yml)
