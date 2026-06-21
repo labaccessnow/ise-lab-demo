@@ -1,5 +1,5 @@
 # ===== CRS317: VLAN 1800 SVI gateway for the ISE demo enclave (demo.lab) =====
-# Additive only. vlan1000 / inside-DMZ BGP mesh / 192.168.88.x are untouched.
+# Additive only. vlan1000 / inside-DMZ BGP mesh are untouched.
 # Gateway 0.0.0.0 serves ISE (0.0.0.0) + Win DC (0.0.0.0) on VLAN 1800.
 
 # 1) L3 SVI on the bridge for tag 1800 (bridge-vlan already tags CPU + sfp-sfpplus2)

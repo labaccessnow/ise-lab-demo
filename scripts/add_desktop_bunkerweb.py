@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Add the desktop.labaccessnow.com vhost to the home BunkerWeb (VM120).
 
-Mirrors the lab.* forward-auth pattern but proxies to Guacamole (guacamole.internal:8080)
+Mirrors the lab.* forward-auth pattern but proxies to Guacamole (GUAC_UPSTREAM)
 and sets a fixed REMOTE_USER:demo header on the upstream (header-auth SSO). Run on
 the BunkerWeb host. Idempotent.
 """
+import os
 import re
 import shutil
+
+# DMZ upstreams — set the real host:port via env (kept out of git).
+GUAC_UPSTREAM = os.environ.get("GUAC_UPSTREAM", "guacamole.internal:8080")
+AUTHENTIK_UPSTREAM = os.environ.get("AUTHENTIK_UPSTREAM", "authentik.internal:9000")
 
 F = "/home/james/bunkerweb/docker-compose.yml"
 shutil.copy(F, F + ".bak.desktop")
 
-BLOCK = '''      desktop.labaccessnow.com_AUTO_LETS_ENCRYPT: "yes"
+BLOCK = f'''      desktop.labaccessnow.com_AUTO_LETS_ENCRYPT: "yes"
       desktop.labaccessnow.com_USE_REVERSE_PROXY: "yes"
-      desktop.labaccessnow.com_REVERSE_PROXY_HOST: "http://guacamole.internal:8080"
+      desktop.labaccessnow.com_REVERSE_PROXY_HOST: "http://{GUAC_UPSTREAM}"
       desktop.labaccessnow.com_REVERSE_PROXY_URL: "/"
       desktop.labaccessnow.com_REVERSE_PROXY_WS: "yes"
       desktop.labaccessnow.com_REVERSE_PROXY_HEADERS: "REMOTE_USER demo"
@@ -24,9 +29,9 @@ BLOCK = '''      desktop.labaccessnow.com_AUTO_LETS_ENCRYPT: "yes"
       desktop.labaccessnow.com_USE_LIMIT_CONN: "no"
       desktop.labaccessnow.com_REVERSE_PROXY_AUTH_REQUEST: "/authentik-auth"
       desktop.labaccessnow.com_REVERSE_PROXY_AUTH_REQUEST_SIGNIN_URL: "https://desktop.labaccessnow.com/outpost.goauthentik.io/start?rd=$$scheme://$$host$$request_uri"
-      desktop.labaccessnow.com_REVERSE_PROXY_HOST_1: "http://authentik.internal:9000"
+      desktop.labaccessnow.com_REVERSE_PROXY_HOST_1: "http://{AUTHENTIK_UPSTREAM}"
       desktop.labaccessnow.com_REVERSE_PROXY_URL_1: "/outpost.goauthentik.io"
-      desktop.labaccessnow.com_REVERSE_PROXY_HOST_999: "http://authentik.internal:9000/outpost.goauthentik.io/auth/nginx"
+      desktop.labaccessnow.com_REVERSE_PROXY_HOST_999: "http://{AUTHENTIK_UPSTREAM}/outpost.goauthentik.io/auth/nginx"
       desktop.labaccessnow.com_REVERSE_PROXY_URL_999: "/authentik-auth"
       desktop.labaccessnow.com_REVERSE_PROXY_HEADERS_999: "X-Original-URL $$scheme://$$http_host$$request_uri;Content-Length \\"\\""
 '''
