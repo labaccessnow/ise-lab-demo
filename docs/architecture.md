@@ -32,9 +32,12 @@ so that firewall policy sits *on top of* ISE authorization.
 | endpoint VLAN | a wired NAC test endpoint |
 | client VLAN | wireless clients behind a real access point |
 
+**Live today:** `ise1`, `dc-demo`, and `wlc-demo`. The Palo Alto, the NAD switch, the wired endpoint,
+and the wireless client/AP are part of the design and not yet provisioned.
+
 Sub-VLANs are default-deny upstream, with the Palo Alto inline as their gateway. The wired endpoint
-and wireless clients exercise 802.1X / MAB end to end, so an authorization change in ISE produces a
-visible effect on a real client.
+and wireless clients will exercise 802.1X / MAB end to end, so an authorization change in ISE produces
+a visible effect on a real client.
 
 ## Reset, not rebuild
 
@@ -59,12 +62,12 @@ cutting the golden image, not an afterthought.
 ## Platform VMs and scale-out
 
 Two platform VMs sit outside the enclave: the **portal** (DMZ, public) and the **runner** (trusted,
-holds the secrets). The admin role can, on demand, bring up additional ISE nodes to demonstrate a
+holds the secrets). The admin role will be able to bring up additional ISE nodes on demand to demonstrate a
 **distributed deployment** — a separate PSN / MnT / secondary PAN — as a showpiece, on top of the
 single-node default loop.
 
 ## Public edge
 
-The portal is published through the same hardened edge the rest of the estate uses: an Oracle-hosted
-BunkerWeb reverse proxy terminating Let's Encrypt TLS with a WAF, an auth gate in front of the
-visitor session, and Cloudflare DNS. The backend and enclave are never exposed to the internet.
+The portal is published through the same kind of hardened edge the rest of the estate uses: a
+BunkerWeb reverse proxy terminating Let's Encrypt TLS with a WAF, an authentication gate in front of
+the visitor session, and Cloudflare DNS. The backend and enclave are never exposed to the internet.

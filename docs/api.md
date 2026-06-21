@@ -1,7 +1,12 @@
 # API automation
 
-Resetting the lab is half the demo. The other half is letting a visitor drive the **live management
+Resetting the lab is half the demo. The other half is designed to let a visitor drive the **live management
 APIs** of each device — safely, because a reset undoes anything they change.
+
+!!! info "Status"
+    The ISE API playground is built and deployed — it returns live data once ISE's management APIs are
+    switched on. The WLC and Palo Alto surfaces below are still the **target**; the enclave today is
+    ISE + DC + WLC.
 
 ## What's covered
 
@@ -38,13 +43,14 @@ instead of drifting from a hand-maintained list.
 
 ## Certificate lifecycle
 
-Certificates are a first-class demo, not an afterthought, because cert renewal is where
-multi-vendor deployments actually hurt. The enclave runs a **real Windows CA (AD CS / NDES)** on the
-domain controller, so SCEP enrollment and renewal work end to end — alongside ISE's internal CA.
+Certificates are a first-class part of the design, because cert renewal is where multi-vendor
+deployments actually hurt. The demo DC is a **real Windows Server**, so it can run **AD CS / NDES**
+(planned) to make SCEP enrollment and renewal work end to end — alongside ISE's internal CA.
 
-The `cert_lifecycle.yml` playbook is the renewal path across ISE, the WLC, the Palo Alto, and the
-NAC endpoint. A visitor (or the admin console) can trigger a renewal and watch the new certificate
-propagate, then roll the whole thing back with a reset.
+The `cert_lifecycle.yml` playbook scaffolds the renewal path. Today it wires the ISE cert role (the
+system-cert bind is still a stub); the WLC, Palo Alto, and NAC-endpoint paths are planned. The intent:
+a visitor (or the admin console) triggers a renewal and watches the new certificate propagate, then
+rolls it back with a reset.
 
 ## Why writes are safe
 

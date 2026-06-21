@@ -4,6 +4,11 @@ The single most important property of this project is that an **untrusted websit
 escape the portal**. Everything else — the resets, the API playground — only exists because this
 boundary holds. This page states the boundary explicitly.
 
+!!! info "Status"
+    The backend, the frontend, and the public edge are live today — the allowlist, the guardrails, and
+    the visitor-session gate all hold. The one piece still planned is the adversarial boundary test
+    described at the end of this page.
+
 ## The threat
 
 Assume the worst: a visitor is hostile and the **frontend is fully compromised**. The question is not
