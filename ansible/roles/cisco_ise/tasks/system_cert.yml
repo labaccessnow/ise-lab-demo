@@ -1,16 +1,151 @@
 ---
 # Phase 5c — system/admin/EAP certificate rotation + bind (RISKY, gated).
-# Runs ONLY when ise_manage_system_cert=true (default false) AND single-node
-# (--limit), enforced in preflight.yml. STUB to be built out in Phase 5c:
-#   - mode=csr:    generate a CSR on the node (cisco.ise certificate_signing_request),
-#                  fetch it for offline signing by the CA (AD CS / ISE internal CA).
-#   - mode=import: import the signed cert (PEM/PKCS12) + bind selected roles
-#                  (admin/eap/portal/pxgrid/radius/dtls) per the ise_bind_* knobs.
-# See defaults/main.yml for the ise_csr_* / ise_system_cert_* / ise_bind_* options,
-# and verify exact module/param casing against `ansible-doc cisco.ise.<module>`.
-- name: System cert — NOT YET IMPLEMENTED (Phase 5c)
-  ansible.builtin.fail:
+# Runs ONLY when ise_manage_system_cert=true AND single-node (--limit), enforced in
+# preflight.yml. Nothing mutates unless ise_apply_mode == "apply".
+#
+# Three modes (ise_system_cert_mode):
+#   renew  -> renew an existing OOB/self-signed system cert in place (fully automated;
+#             the simplest end-to-end demo path — no external CA needed)
+#   csr    -> generate a CSR on the node + export the PEM for offline CA signing, then
+#             re-run with mode=import providing the signed cert
+#   import -> bind a signed cert: by CSR id (bind_signed_certificate) or by PEM+key
+#             (system_certificate_import) + role binds, then verify
+#
+# Param NAMES verified against cisco.ise 3.2.0 module docs; param VALUES (e.g. the
+# renew certType, the CSR-id path in the generate response) should be confirmed with a
+# dry run / `ansible-doc cisco.ise.<module>` against the live node before apply.
+
+# ---------------------------------------------------------------- mode: renew
+- name: Renew — dry run
+  when:
+    - ise_system_cert_mode == "renew"
+    - ise_apply_mode != "apply"
+  ansible.builtin.debug:
     msg: >-
-      tasks/system_cert.yml is a Phase 5c stub. ise_manage_system_cert is enabled but
-      the CSR/import/bind logic is not built yet — keep ise_manage_system_cert=false
-      until Phase 5c (cert lifecycle).
+      [dry run] would renew the '{{ ise_renew_cert_type }}' system certificate on
+      {{ ise_system_cert_node }}. Re-run with -e ise_apply_mode=apply to renew.
+
+- name: Renew — renew the system certificate in place
+  when:
+    - ise_system_cert_mode == "renew"
+    - ise_apply_mode == "apply"
+  cisco.ise.renew_certificate:
+    certType: "{{ ise_renew_cert_type }}"
+  register: ise_renew_result
+
+# ------------------------------------------------------------------ mode: csr
+- name: CSR — generate a signing request on the node
+  when: ise_system_cert_mode == "csr"
+  cisco.ise.csr_generate:
+    hostnames: ["{{ ise_system_cert_node }}"]
+    allowWildCardCert: "{{ ise_csr_allow_wildcard }}"
+    keyType: "{{ ise_csr_key_type }}"
+    keyLength: "{{ ise_csr_key_length | string }}"
+    digestType: "{{ ise_csr_digest }}"
+    usedFor: "{{ ise_csr_used_for | join(',') }}"
+    subjectCommonName: "{{ ise_csr_common_name }}"
+    subjectOrg: "{{ ise_csr_subject_org }}"
+    subjectOrgUnit: "{{ ise_csr_subject_ou }}"
+    subjectCity: "{{ ise_csr_subject_city | default(omit, true) }}"
+    subjectState: "{{ ise_csr_subject_state | default(omit, true) }}"
+    subjectCountry: "{{ ise_csr_subject_country }}"
+    sanDNS: "{{ ise_csr_san_dns }}"
+    sanIP: "{{ ise_csr_san_ip }}"
+  register: ise_csr_result
+
+- name: CSR — export the generated CSR (PEM) to the control node for offline signing
+  when:
+    - ise_system_cert_mode == "csr"
+    - ise_apply_mode == "apply"
+  cisco.ise.csr_export_info:
+    hostname: "{{ ise_system_cert_node }}"
+    id: "{{ ise_csr_result.ise_response.id | default(omit) }}"
+    dirPath: "{{ ise_csr_export_dir }}"
+    filename: "{{ ise_system_cert_node }}.csr"
+    saveFile: true
+  register: ise_csr_export
+
+- name: CSR — next step
+  when: ise_system_cert_mode == "csr"
+  ansible.builtin.debug:
+    msg: >-
+      CSR for {{ ise_system_cert_node }}
+      {{ 'generated + exported under ' + ise_csr_export_dir if ise_apply_mode == 'apply'
+         else 'previewed (add -e ise_apply_mode=apply to generate + export)' }}.
+      Sign it with your CA (ISE internal CA, an offline CA, or AD CS/NDES once on the
+      demo DC), then re-run with -e ise_system_cert_mode=import -e
+      ise_system_cert_path=<signed.pem> [-e ise_system_cert_csr_id=<id>].
+
+# --------------------------------------------------------------- mode: import
+- name: Import — dry run
+  when:
+    - ise_system_cert_mode == "import"
+    - ise_apply_mode != "apply"
+  ansible.builtin.debug:
+    msg: >-
+      [dry run] would install {{ ise_system_cert_path | default('(set ise_system_cert_path)', true) }}
+      on {{ ise_system_cert_node }} | binds: admin={{ ise_bind_admin }} eap={{ ise_bind_eap }}
+      portal={{ ise_bind_portal }} pxgrid={{ ise_bind_pxgrid }} radius={{ ise_bind_radius }}.
+      Re-run with -e ise_apply_mode=apply.
+
+- name: Import — bind a CSR-signed cert to roles (when a CSR id is known)
+  when:
+    - ise_system_cert_mode == "import"
+    - ise_apply_mode == "apply"
+    - ise_system_cert_csr_id | length > 0
+  cisco.ise.bind_signed_certificate:
+    id: "{{ ise_system_cert_csr_id }}"
+    hostName: "{{ ise_system_cert_node }}"
+    data: "{{ lookup('ansible.builtin.file', ise_system_cert_path) }}"
+    name: "{{ ise_system_cert_node }}-{{ ise_csr_key_type | lower }}"
+    admin: "{{ ise_bind_admin }}"
+    eap: "{{ ise_bind_eap }}"
+    portal: "{{ ise_bind_portal }}"
+    pxgrid: "{{ ise_bind_pxgrid }}"
+    radius: "{{ ise_bind_radius }}"
+    saml: "{{ ise_bind_saml }}"
+    ims: "{{ ise_bind_ims }}"
+    allowReplacementOfCertificates: "{{ ise_allow_replace_cert }}"
+    allowOutOfDateCert: "{{ ise_allow_out_of_date }}"
+    validateCertificateExtensions: "{{ ise_validate_extensions }}"
+    portalGroupTag: "{{ ise_portal_group_tag }}"
+  register: ise_bind_result
+
+- name: Import — install a PEM/PKCS12 cert+key and bind roles (no prior CSR)
+  when:
+    - ise_system_cert_mode == "import"
+    - ise_apply_mode == "apply"
+    - ise_system_cert_csr_id | length == 0
+  cisco.ise.system_certificate_import:
+    name: "{{ ise_system_cert_node }}-{{ ise_csr_key_type | lower }}"
+    data: "{{ lookup('ansible.builtin.file', ise_system_cert_path) }}"
+    privateKeyData: "{{ lookup('ansible.builtin.file', ise_system_cert_key_path) if ise_system_cert_key_path | length > 0 else omit }}"
+    password: "{{ ise_system_cert_key_password if ise_system_cert_key_password | length > 0 else omit }}"
+    admin: "{{ ise_bind_admin }}"
+    eap: "{{ ise_bind_eap }}"
+    portal: "{{ ise_bind_portal }}"
+    pxgrid: "{{ ise_bind_pxgrid }}"
+    radius: "{{ ise_bind_radius }}"
+    saml: "{{ ise_bind_saml }}"
+    ims: "{{ ise_bind_ims }}"
+    allowReplacementOfCertificates: "{{ ise_allow_replace_cert }}"
+    allowOutOfDateCert: "{{ ise_allow_out_of_date }}"
+    allowSHA1Certificates: "{{ ise_allow_sha1 }}"
+    allowWildCardCertificates: "{{ ise_allow_wildcard_import }}"
+    validateCertificateExtensions: "{{ ise_validate_extensions }}"
+    portalGroupTag: "{{ ise_portal_group_tag }}"
+  register: ise_import_result
+
+# ----------------------------------------------------- verify (after any apply)
+- name: Verify — read back the system certs on the node
+  when: ise_apply_mode == "apply"
+  cisco.ise.system_certificate_info:
+    hostName: "{{ ise_system_cert_node }}"
+  register: ise_syscert_verify
+
+- name: Verify — summarize the system certs present
+  when: ise_apply_mode == "apply"
+  ansible.builtin.debug:
+    msg: >-
+      System certs on {{ ise_system_cert_node }}:
+      {{ ise_syscert_verify.ise_response | default([]) | map(attribute='friendlyName') | list }}

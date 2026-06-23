@@ -16,8 +16,9 @@
 # ----------------------------------------------------------------------------
 
 # --- connection (ERS/OpenAPI) --------------------------------------------
-# These feed `module_defaults: group/cisco.ise.all` in tasks/main.yml, so every
-# cisco.ise.* module inherits them. Creds come from VAULT/SOPS — never inline.
+# These feed the per-module `module_defaults` anchor in tasks/main.yml (cisco.ise
+# 3.2.0 has no `all` action group), so every cisco.ise.* module inherits them.
+# Creds come from VAULT/SOPS — never inline.
 # Pull them from secrets.sops.json key `cisco_ise` (admin ERS account) into
 # group_vars/cisco_ise.yml (vaulted) or pass with -e.
 ise_hostname: "{{ inventory_hostname }}"     # PAN / mgmt FQDN or IP the API answers on
@@ -59,10 +60,16 @@ ise_manage_system_cert: false
 ise_system_cert_node: ""
 
 # How to obtain the cert. Recommended flow:
+#   renew   -> renew an existing OOB/self-signed system cert in place (no external CA).
 #   csr     -> role generates a CSR on the node, you sign it with your CA offline,
 #              then re-run with mode=import providing the signed cert.
 #   import  -> import an externally-produced cert + key (PKCS#12 or PEM+key).
-ise_system_cert_mode: "csr"          # "csr" | "import"
+ise_system_cert_mode: "csr"          # "renew" | "csr" | "import"
+ise_renew_cert_type: "OOB"           # mode=renew: cert type to renew (verify valid values
+                                     # via `ansible-doc cisco.ise.renew_certificate`)
+ise_csr_export_dir: "/tmp"           # mode=csr: where the exported CSR PEM is written (control node)
+ise_system_cert_csr_id: ""           # mode=import: bind by CSR id (bind_signed_certificate);
+                                     # empty -> import a PEM+key instead (system_certificate_import)
 
 # CSR generation (mode=csr) ------------------------------------------------
 ise_csr_common_name: "{{ ise_system_cert_node }}"
@@ -92,6 +99,8 @@ ise_bind_portal:  false
 ise_bind_pxgrid:  false
 ise_bind_radius:  false
 ise_bind_dtls:    false
+ise_bind_saml:    false
+ise_bind_ims:     false
 ise_portal_group_tag: "Default Portal Certificate Group"
 # Safety toggles passed to the import (leave strict unless you know why).
 ise_allow_replace_cert: true         # replace the existing cert with same CN/role

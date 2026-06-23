@@ -26,6 +26,12 @@
       ise_debug: "{{ ise_debug }}"
     cisco.ise.trusted_certificate_info: *ise_conn
     cisco.ise.trusted_certificate_import: *ise_conn
+    cisco.ise.csr_generate: *ise_conn
+    cisco.ise.csr_export_info: *ise_conn
+    cisco.ise.bind_signed_certificate: *ise_conn
+    cisco.ise.system_certificate_import: *ise_conn
+    cisco.ise.system_certificate_info: *ise_conn
+    cisco.ise.renew_certificate: *ise_conn
   block:
 
     - name: Preflight — validate vars, creds, and gates
