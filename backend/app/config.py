@@ -30,6 +30,9 @@ PROXMOX_PORT = int(os.environ.get("PVE_PORT", "8006"))
 PROXMOX_NODE = os.environ.get("PVE_NODE", "pve")
 POOL = os.environ.get("PVE_POOL", "iselab")
 
+# Cisco 9800-CL WLC RESTCONF endpoint (Phase 5b). Real value in the gitignored .env.
+WLC_HOST = os.environ.get("WLC_HOST", "wlc.lab.example")
+
 GOLDEN_SNAPSHOT = "golden"
 
 # The ONLY VMs the portal may touch (blast-radius allowlist). Display names only.
