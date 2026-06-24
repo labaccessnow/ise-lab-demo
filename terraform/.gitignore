@@ -1,0 +1,10 @@
+# Terraform state can contain the (sensitive) API token and site details — never commit.
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json

@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+# Nothing real is committed — same sanitization rule as the rest of the repo.
+
+pve_endpoint  = "https://YOUR-PVE-IP:8006/"
+pve_node      = "your-node-name"
+pve_api_token = "iselab@pve!terraform=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+pve_insecure  = true
+pve_ssh_user  = "root"
+pve_ssh_agent = true
+pool          = "iselab"
