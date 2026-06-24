@@ -36,11 +36,17 @@ WLC_HOST = os.environ.get("WLC_HOST", "wlc.lab.example")
 GOLDEN_SNAPSHOT = "golden"
 
 # The ONLY VMs the portal may touch (blast-radius allowlist). Display names only.
-ENCLAVE_VMS = {125: "ise1", 126: "dc-demo", 130: "wlc-demo", 134: "jumpbox"}
+ENCLAVE_VMS = {
+    125: "ise1", 126: "dc-demo", 130: "wlc-demo", 134: "jumpbox",
+    # Multi-vendor platforms (2026-06-24) — in the reset baseline once golden-snapshotted:
+    142: "nad-sw", 147: "paloalto", 151: "veos", 152: "arubacx",
+    # Pending golden (add to RESET_ORDER when configured): 145 fmcv, 146 ftdv, 148 clearpass, 150 c8000v
+}
 
 # Reset order: DC first (DNS/NTP) so ISE/WLC find their dependencies on rollback;
-# the jumpbox last, so it comes back to a clean desktop after the devices are up.
-RESET_ORDER = [126, 125, 130, 134]
+# then the NADs/firewalls (they depend on ISE for AAA); the jumpbox last, so it
+# comes back to a clean desktop after the devices are up.
+RESET_ORDER = [126, 125, 130, 142, 147, 151, 152, 134]
 
 # Guardrails
 RATE_LIMIT_WINDOW_S = 60
