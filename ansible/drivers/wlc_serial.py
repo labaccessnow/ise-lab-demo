@@ -21,6 +21,7 @@ Mirrors ise_serial.py: SSH to the PVE host, pexpect the serial socket, creds
 from SOPS (key `cisco_wlc`).  STATUS: scaffold — validate at first provision.
 """
 import os, sys, json, subprocess, pexpect
+os.environ.setdefault("SOPS_AGE_KEY_FILE", os.path.expanduser("~/ise-lab-demo/secrets/age.key"))
 
 PVE   = "root@${PVE_HOST}"
 VMID  = 130
@@ -33,7 +34,7 @@ MGMT_IF = "GigabitEthernet1"        # single vNIC = the wireless-mgmt/mgmt inter
 def creds():
     out = subprocess.check_output(
         [os.path.expanduser("~/.local/bin/sops"), "-d",
-         os.path.expanduser("~/proxmox-automation/secrets/secrets.sops.json")])
+         os.path.expanduser("~/ise-lab-demo/secrets/secrets.sops.json")])
     w = json.loads(out)["cisco_wlc"]
     return w["admin_user"], w["admin_password"], w.get("enable_secret", w["admin_password"])
 

@@ -7,6 +7,7 @@ Modes:
   drive [maxsec]    run the ISE setup wizard end-to-end (answers below)
 """
 import sys, time, os, json, subprocess
+os.environ.setdefault("SOPS_AGE_KEY_FILE", os.path.expanduser("~/ise-lab-demo/secrets/age.key"))
 import pexpect
 
 PVE = "root@${PVE_HOST}"
@@ -72,7 +73,7 @@ elif mode == "drive":
     maxsec = int(sys.argv[2]) if len(sys.argv) > 2 else 900
     sec = json.loads(subprocess.run(
         [os.path.expanduser("~/.local/bin/sops"), "-d",
-         os.path.expanduser("~/proxmox-automation/secrets/secrets.sops.json")],
+         os.path.expanduser("~/ise-lab-demo/secrets/secrets.sops.json")],
         capture_output=True, text=True).stdout)
     PW = sec["cisco_ise"]["cli_password"]
     # (all keywords lowercased) -> response ; checked in order, first full match wins
@@ -154,7 +155,7 @@ elif mode == "drive":
 elif mode == "appstatus":
     sec = json.loads(subprocess.run(
         [os.path.expanduser("~/.local/bin/sops"), "-d",
-         os.path.expanduser("~/proxmox-automation/secrets/secrets.sops.json")],
+         os.path.expanduser("~/ise-lab-demo/secrets/secrets.sops.json")],
         capture_output=True, text=True).stdout)
     user = sec["cisco_ise"].get("cli_user", "admin")
     pw = sec["cisco_ise"]["cli_password"]
@@ -185,7 +186,7 @@ elif mode == "appwait":
     import re as _re
     sec = json.loads(subprocess.run(
         [os.path.expanduser("~/.local/bin/sops"), "-d",
-         os.path.expanduser("~/proxmox-automation/secrets/secrets.sops.json")],
+         os.path.expanduser("~/ise-lab-demo/secrets/secrets.sops.json")],
         capture_output=True, text=True).stdout)
     user = sec["cisco_ise"].get("cli_user", "admin"); pw = sec["cisco_ise"]["cli_password"]
     maxsec = int(sys.argv[2]) if len(sys.argv) > 2 else 1500
