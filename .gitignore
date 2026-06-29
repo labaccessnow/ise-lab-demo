@@ -1,5 +1,7 @@
 # --- secrets: NOTHING real is committed (public repo) — see secrets.example.json ---
 secrets/secrets.sops.json
+secrets/secrets.sops.json.*
+secrets/*.bak*
 secrets/age*.key
 secrets/*.agekey
 *.dec.json
