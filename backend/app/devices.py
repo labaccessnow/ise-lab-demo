@@ -36,7 +36,10 @@ _OPENER = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(c
 
 def _ise_creds():
     s = load_secrets()["cisco_ise"]
-    return s["ip"], s["gui_user"], s["gui_password"]
+    # `ip` is stored with a CIDR suffix (e.g. 0.0.0.0/24); strip it so the URL host
+    # is just the address — otherwise the "/24" lands in the path and ISE
+    # 302-redirects the unknown path to /admin/ (mistaken for "API disabled").
+    return s["ip"].split("/")[0], s["gui_user"], s["gui_password"]
 
 
 def ise_call(method: str, path: str, body=None):
