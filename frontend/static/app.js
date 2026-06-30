@@ -26,7 +26,11 @@ async function api(method, path, body) {
   });
   let data = null;
   try { data = await r.json(); } catch (_) {}
-  if (!r.ok) throw new Error((data && data.detail) || `HTTP ${r.status}`);
+  if (!r.ok) {
+    const err = new Error((data && data.detail) || `HTTP ${r.status}`);
+    err.status = r.status;
+    throw err;
+  }
   return data;
 }
 
@@ -48,23 +52,27 @@ function renderVMs(vms) {
   }
 }
 
+function applyMaintenance(result) {
+  const banner = $("#maintBanner");
+  const btn = $("#resetBtn");
+  if (result.maintenance) {
+    banner.hidden = false;
+    banner.textContent =
+      "⚠ The lab is temporarily offline — a reset didn't come back healthy and an " +
+      "operator has been alerted. Resets are paused until it's back. " +
+      (result.maintenance_reason ? `(${result.maintenance_reason})` : "");
+    if (btn) btn.disabled = true;
+  } else {
+    banner.hidden = true;
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadStatus() {
   const { result } = await api("POST", "/api/action/lab.status");
   renderVMs(result.vms);
+  applyMaintenance(result);
   return result.vms;
-}
-
-async function pollUntilReady(timeoutMs = 210000) {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    await new Promise((r) => setTimeout(r, 4000));
-    let vms;
-    try { vms = await loadStatus(); } catch (e) { continue; }
-    const up = vms.filter((v) => v.status === "running").length;
-    log(`… ${up}/${vms.length} VMs running`, "dim");
-    if (up === vms.length) return true;
-  }
-  return false;
 }
 
 async function doReset() {
@@ -73,22 +81,31 @@ async function doReset() {
   btn.disabled = true;
   $("#refreshBtn").disabled = true;
   try {
-    log("reset requested — rolling back to golden snapshot…");
+    log("reset requested — rolling back to golden and verifying the lab…");
+    log("this takes a couple of minutes (roll back + health-check every device)…", "dim");
+    // The backend now blocks until every VM is rolled back AND the lab is verified
+    // healthy, so this response means the lab is genuinely ready (or it 503s).
     const { result } = await api("POST", "/api/action/lab.reset");
     for (const r of result.reset) {
-      if (r.skipped) log(`  VM ${r.vmid}: skipped (${r.skipped})`, "err");
-      else log(`  VM ${r.vmid}: rollback started`, "dim");
+      if (r.skipped) log(`  ${r.name || r.vmid}: skipped (${r.skipped})`, "err");
+      else log(`  ${r.name || r.vmid}: rolled back ${r.rollback}`, r.rollback === "ok" ? "dim" : "err");
     }
-    log("waiting for the enclave to come back…");
-    const ready = await pollUntilReady();
-    if (ready) log("lab reset complete — ready to drive again.", "ok");
-    else log("still settling — give it another moment, then Refresh.", "err");
+    // Backend now blocks until verified; a 200 always means health === "ok".
+    log("lab reset complete and verified healthy — ready to drive again.", "ok");
   } catch (e) {
-    if (String(e.message).includes("409")) log("a reset is already in progress — please wait.", "err");
+    if (e.status === 409) log("a reset is already in progress — please wait.", "err");
+    else if (e.status === 503) log("reset failed health-check — the lab was taken offline and an operator alerted.", "err");
     else log(`reset failed: ${e.message}`, "err");
   } finally {
-    btn.disabled = false;
     $("#refreshBtn").disabled = false;
+    // Re-sync status (re-enables Reset only if not in maintenance / surfaces the
+    // banner on a 503). Never let a status blip leave the button stuck disabled.
+    try {
+      await loadStatus();
+    } catch (_) {
+      btn.disabled = false;
+      log("couldn't refresh lab status — click Refresh to retry.", "err");
+    }
   }
 }
 

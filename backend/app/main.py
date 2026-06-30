@@ -11,7 +11,8 @@ this service must only ever be reachable from the portal, never the internet.
 from fastapi import Body, FastAPI, Header, HTTPException
 
 from . import catalog, guardrails, sessions
-from .actions import ACTIONS
+from .actions import ACTIONS, LabUnavailable
+from .actions import maintenance_on as actions_maintenance_on
 from .devices import DeviceError
 from .proxmox import Proxmox, ProxmoxError
 from .webhook import router as webhook_router
@@ -69,6 +70,11 @@ def run_action(action_id: str,
         raise HTTPException(404, "unknown action")
     if not _authorized(x_role, act.role):
         raise HTTPException(403, f"action requires role '{act.role}'")
+    # While the lab is offline (a reset failed health-check), don't let a visitor
+    # drive any action against the half-broken lab — except lab.status, which feeds
+    # the maintenance banner. Admin recovery actions (clear_maintenance) stay open.
+    if act.role == "visitor" and action_id != "lab.status" and actions_maintenance_on():
+        raise HTTPException(503, "Lab is temporarily offline for maintenance. Please try again later.")
     try:
         guardrails.rate_check(x_session)
     except guardrails.RateLimited as e:
@@ -81,6 +87,8 @@ def run_action(action_id: str,
             raise HTTPException(409, str(e))
     try:
         return {"action": action_id, "result": act.fn(px(), payload or {})}
+    except LabUnavailable as e:
+        raise HTTPException(503, str(e))
     except (ProxmoxError, DeviceError) as e:
         raise HTTPException(502, str(e))
     finally:

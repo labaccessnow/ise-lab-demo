@@ -56,7 +56,15 @@ def ise_call(method: str, path: str, body=None):
     try:
         with _OPENER.open(req, timeout=25) as r:
             txt = r.read().decode()
-            return json.loads(txt) if txt.strip() else {}
+            if not txt.strip():
+                return {}
+            try:
+                return json.loads(txt)
+            except json.JSONDecodeError:
+                # ISE can return 200 with a non-JSON body (HTML) while its web
+                # server is up but the API is still booting after a vmstate
+                # restore. Surface it as a clean DeviceError, not a 500.
+                raise DeviceError(f"ISE returned non-JSON body: {txt[:200]}")
     except urllib.error.HTTPError as e:
         if e.code in (301, 302):
             raise DeviceError(

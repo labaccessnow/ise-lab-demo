@@ -48,7 +48,30 @@ ENCLAVE_VMS = {
 # comes back to a clean desktop after the devices are up.
 RESET_ORDER = [126, 125, 130, 142, 147, 151, 152, 134]
 
+# Post-reset health targets — (name, host, port). Real IPs come from the gitignored
+# .env (placeholders 0.0.0.0 in the committed .env.example). A reset is only "good"
+# when every advertised device answers; otherwise the lab is taken offline + alerted.
+HEALTH_TARGETS = [
+    ("ise1-https",   os.environ.get("ENCLAVE_ISE_IP",     "0.0.0.0"), 443),   # ISE OpenAPI
+    ("ise1-ers",     os.environ.get("ENCLAVE_ISE_IP",     "0.0.0.0"), 9060),  # ISE ERS
+    ("dc-demo-dns",  os.environ.get("ENCLAVE_DC_IP",      "0.0.0.0"), 53),    # DC DNS
+    ("wlc-demo",     os.environ.get("ENCLAVE_WLC_IP",     "0.0.0.0"), 443),   # WLC mgmt
+    ("nad-sw-ssh",   os.environ.get("ENCLAVE_NAD_IP",     "0.0.0.0"), 22),    # Cat9kv NAD
+    ("jumpbox-rdp",  os.environ.get("ENCLAVE_JUMPBOX_IP", "0.0.0.0"), 3389),  # Guacamole target
+]
+
+# Maintenance flag: when this file exists the lab is OFFLINE (a reset failed its
+# health-check). lab.reset is blocked + lab.status reports degraded until an admin
+# clears it (lab.clear_maintenance), so a stranger never lands on a half-broken lab.
+MAINTENANCE_FLAG = os.path.join(os.path.dirname(__file__), "..", ".maintenance")
+
+# Post-reset verification tuning.
+HEALTH_RETRIES = 5          # health-check attempts after rollbacks complete
+HEALTH_RETRY_WAIT_S = 10    # seconds between attempts (vmstate restore is fast)
+
 # Guardrails
 RATE_LIMIT_WINDOW_S = 60
 RATE_LIMIT_MAX = 6          # per session/IP per window
-ACTION_TIMEOUT_S = 600     # hard cap on any single action
+ACTION_TIMEOUT_S = 240     # hard wall-clock cap on a reset; MUST stay < the Tier-1
+                           # portal proxy read timeout (300s) and the edge timeout,
+                           # so a slow reset still returns a deterministic 503 in-window.

@@ -35,3 +35,6 @@ guacamole/.env
 guacamole/data/
 guacamole/initdb/
 backend/.env
+
+# runtime maintenance/offline flag (set when a reset fails health-check)
+backend/.maintenance
