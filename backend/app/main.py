@@ -51,6 +51,21 @@ def session_info(token: str):
     return {"valid": True, "lab": s["lab_id"], "expires_at": s["expires_at"]}
 
 
+@app.post("/api/session/claim")
+def session_claim(payload: dict | None = Body(default=None),
+                  x_identity_email: str = Header(None)):
+    """Redeem a booking token against the edge-verified identity (forwarded by the
+    trusted portal as X-Identity-Email). Binds the token single-use to that identity
+    and returns a fresh server_sid the portal sets as an httponly cookie — a forwarded
+    ?session= link is useless to anyone else. The booking token never returns to the
+    client. 403 on wrong identity / already-claimed-by-other / expired."""
+    token = (payload or {}).get("token")
+    res = sessions.claim(token, x_identity_email)
+    if not res:
+        raise HTTPException(403, "session could not be claimed (wrong identity, already in use, or expired)")
+    return res
+
+
 @app.get("/api/actions")
 def list_actions(x_role: str = Header("visitor")):
     return {

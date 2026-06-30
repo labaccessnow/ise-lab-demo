@@ -64,6 +64,39 @@ async def session_check(token: str):
     return await _proxy("GET", f"/api/session/{token}", token)
 
 
+@app.post("/api/session/claim")
+async def session_claim(request: Request):
+    """Redeem the ?session= booking token against the edge-verified identity.
+
+    The identity comes ONLY from the trusted forward-auth header that the edge sets
+    from the Authentik auth subrequest (X-Forwarded-Email) — never from the client
+    body. The edge MUST strip any client-supplied copy of this header (see infra
+    notes). On success the booking token is consumed and we set an httponly `sid`
+    cookie = the server-minted session id; the token never goes back to the client.
+    """
+    email = request.headers.get("X-Forwarded-Email", "")
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    token = (body or {}).get("token")
+    try:
+        r = await _client.post("/api/session/claim",
+                               headers={"X-Identity-Email": email}, json={"token": token})
+    except httpx.HTTPError as e:
+        return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
+    try:
+        data = r.json()
+    except Exception:
+        data = {"detail": "backend returned non-JSON"}
+    if r.status_code != 200:
+        return JSONResponse(status_code=r.status_code, content=data)
+    resp = JSONResponse(status_code=200, content={"ok": True, "lab": data["lab_id"],
+                                                  "expires_at": data["expires_at"]})
+    resp.set_cookie("sid", data["server_sid"], httponly=True, samesite="lax", max_age=86400)
+    return resp
+
+
 @app.post("/api/action/{action_id}")
 async def action(action_id: str, request: Request, sid: str = Cookie(None)):
     try:
