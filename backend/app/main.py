@@ -79,7 +79,8 @@ def list_actions(x_role: str = Header("visitor")):
 def run_action(action_id: str,
                payload: dict | None = Body(default=None),
                x_role: str = Header("visitor"),
-               x_session: str = Header("anon")):
+               x_session: str = Header("anon"),
+               x_client_ip: str = Header(None)):
     act = ACTIONS.get(action_id)
     if act is None:
         raise HTTPException(404, "unknown action")
@@ -90,12 +91,15 @@ def run_action(action_id: str,
     # the maintenance banner. Admin recovery actions (clear_maintenance) stay open.
     if act.role == "visitor" and action_id != "lab.status" and actions_maintenance_on():
         raise HTTPException(503, "Lab is temporarily offline for maintenance. Please try again later.")
-    try:
-        guardrails.rate_check(x_session)
-    except guardrails.RateLimited as e:
-        raise HTTPException(429, str(e))
-
+    # Rate-limit ONLY the expensive mutating actions (reset/create), keyed on the
+    # real client IP the edge forwards (X-Client-IP) — NOT a client-chosen session
+    # id, which a script trivially rotates to bypass the cap. Cheap reads
+    # (lab.status etc.) are never limited, so an engaged visitor never hits the wall.
     if act.mutating:
+        try:
+            guardrails.rate_check(x_client_ip or x_session)
+        except guardrails.RateLimited as e:
+            raise HTTPException(429, str(e))
         try:
             guardrails.acquire(action_id)
         except guardrails.Busy as e:

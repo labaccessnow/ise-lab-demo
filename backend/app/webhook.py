@@ -29,7 +29,10 @@ _DEFAULT_LAB = "ise-lab-demo"
 def _verify(body: bytes, sig: str) -> bool:
     secret = os.environ.get("CAL_WEBHOOK_SECRET", "")
     if not secret:
-        return True  # unconfigured = test mode; accept
+        # Fail CLOSED: with no secret we cannot verify the signature, so reject
+        # rather than accept arbitrary callers (an unsigned post would otherwise
+        # mint a session + email a booking link to any attacker-chosen address).
+        return False
     if not sig:
         return False
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()

@@ -34,9 +34,19 @@ def _role() -> str:
     return "visitor"
 
 
-async def _proxy(method: str, path: str, sid: str, json_body=None) -> JSONResponse:
+def _client_ip(request: Request) -> str:
+    # The edge (BunkerWeb) sets X-Forwarded-For with the real visitor IP as the first
+    # hop; fall back to the direct peer. The backend rate-limits mutating actions on
+    # this, so a client can't dodge the cap by rotating a self-chosen session id.
+    xff = request.headers.get("X-Forwarded-For", "")
+    return (xff.split(",")[0].strip() if xff else "") or (request.client.host if request.client else "")
+
+
+async def _proxy(method: str, path: str, sid: str, client_ip: str = "", json_body=None) -> JSONResponse:
     try:
-        r = await _client.request(method, path, headers={"X-Role": _role(), "X-Session": sid}, json=json_body)
+        r = await _client.request(method, path,
+                                  headers={"X-Role": _role(), "X-Session": sid, "X-Client-IP": client_ip},
+                                  json=json_body)
     except httpx.HTTPError as e:
         return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
     try:
@@ -49,13 +59,13 @@ async def _proxy(method: str, path: str, sid: str, json_body=None) -> JSONRespon
 
 
 @app.get("/api/actions")
-async def actions(sid: str = Cookie(None)):
-    return await _proxy("GET", "/api/actions", sid or uuid.uuid4().hex)
+async def actions(request: Request, sid: str = Cookie(None)):
+    return await _proxy("GET", "/api/actions", sid or uuid.uuid4().hex, _client_ip(request))
 
 
 @app.get("/api/catalog")
-async def catalog(sid: str = Cookie(None)):
-    return await _proxy("GET", "/api/catalog", sid or uuid.uuid4().hex)
+async def catalog(request: Request, sid: str = Cookie(None)):
+    return await _proxy("GET", "/api/catalog", sid or uuid.uuid4().hex, _client_ip(request))
 
 
 @app.get("/api/session/{token}")
@@ -103,7 +113,8 @@ async def action(action_id: str, request: Request, sid: str = Cookie(None)):
         body = await request.json()
     except Exception:
         body = None
-    return await _proxy("POST", f"/api/action/{action_id}", sid or uuid.uuid4().hex, json_body=body)
+    return await _proxy("POST", f"/api/action/{action_id}", sid or uuid.uuid4().hex,
+                        _client_ip(request), json_body=body)
 
 
 @app.get("/healthz")

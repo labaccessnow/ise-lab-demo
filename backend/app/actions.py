@@ -61,7 +61,7 @@ def _status(px, params):
         st = px.vm_status(vmid)
         snaps = [s["name"] for s in px.list_snapshots(vmid) if s.get("name") != "current"]
         vms.append({
-            "vmid": vmid, "name": ENCLAVE_VMS[vmid],
+            "name": ENCLAVE_VMS[vmid],   # display name only — internal Proxmox VMID is not exposed to visitors
             "status": st.get("status"), "golden": GOLDEN_SNAPSHOT in snaps,
         })
     out = {"vms": vms, "maintenance": maintenance_on()}
@@ -112,7 +112,7 @@ def _reset(px, params):
     for vmid in RESET_ORDER:
         snaps = [s["name"] for s in px.list_snapshots(vmid)]
         if GOLDEN_SNAPSHOT not in snaps:
-            done.append({"vmid": vmid, "skipped": "no golden snapshot"})
+            done.append({"name": ENCLAVE_VMS.get(vmid), "skipped": "no golden snapshot"})
             continue
         upid = px.rollback(vmid, GOLDEN_SNAPSHOT)
         budget = int(deadline - time.time())
@@ -120,7 +120,7 @@ def _reset(px, params):
         # Only a STOPPED-with-bad-exitstatus is a definitive rollback failure; a
         # still-running task at the budget is left for the health check to judge.
         outcome = "ok" if (stopped and ok) else ("FAILED" if stopped else "slow")
-        done.append({"vmid": vmid, "name": ENCLAVE_VMS.get(vmid), "rollback": outcome})
+        done.append({"name": ENCLAVE_VMS.get(vmid), "rollback": outcome})
         if outcome == "FAILED":
             rollback_failed.append(ENCLAVE_VMS.get(vmid, vmid))
         if time.time() >= deadline:

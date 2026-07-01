@@ -7,6 +7,11 @@ const ROLES = {
   "ise1":     "Cisco ISE 3.4 — policy / admin node",
   "dc-demo":  "Windows Server — DNS · NTP · AD · CA",
   "wlc-demo": "Cisco 9800-CL — wireless LAN controller",
+  "nad-sw":   "Cisco Catalyst 9000v — wired 802.1X switch (NAD)",
+  "paloalto": "Palo Alto VM-Series — next-gen firewall",
+  "veos":     "Arista vEOS — data-center switch",
+  "arubacx":  "Aruba CX — switch",
+  "jumpbox":  "Linux desktop — the jump host you drive (resets with the lab)",
 };
 
 function log(msg, cls) {
@@ -77,18 +82,24 @@ async function loadStatus() {
 
 async function doReset() {
   const btn = $("#resetBtn");
-  if (!confirm("Reset the lab? Every enclave VM rolls back to the golden snapshot. Any changes you made will be wiped.")) return;
+  if (!confirm("Reset the lab? Every enclave VM rolls back to the golden snapshot — any changes you made are wiped, and your lab-desktop tab (if open) will disconnect and need reopening.")) return;
   btn.disabled = true;
   $("#refreshBtn").disabled = true;
+  // Reset blocks for ~2-3 min (rollback + health-check); show a live heartbeat so
+  // the screen never looks hung. Cleared in finally on success or failure.
+  const t0 = Date.now();
+  const hb = setInterval(() => {
+    log(`  …still working — ${Math.round((Date.now() - t0) / 1000)}s elapsed (rolling back + health-checking each device)`, "dim");
+  }, 15000);
   try {
     log("reset requested — rolling back to golden and verifying the lab…");
-    log("this takes a couple of minutes (roll back + health-check every device)…", "dim");
+    log("this takes about 2–3 minutes; the page updates automatically when it's done…", "dim");
     // The backend now blocks until every VM is rolled back AND the lab is verified
     // healthy, so this response means the lab is genuinely ready (or it 503s).
     const { result } = await api("POST", "/api/action/lab.reset");
     for (const r of result.reset) {
-      if (r.skipped) log(`  ${r.name || r.vmid}: skipped (${r.skipped})`, "err");
-      else log(`  ${r.name || r.vmid}: rolled back ${r.rollback}`, r.rollback === "ok" ? "dim" : "err");
+      if (r.skipped) log(`  ${r.name}: skipped (${r.skipped})`, "err");
+      else log(`  ${r.name}: rolled back ${r.rollback}`, (r.rollback === "ok" || r.rollback === "slow") ? "dim" : "err");
     }
     // Backend now blocks until verified; a 200 always means health === "ok".
     log("lab reset complete and verified healthy — ready to drive again.", "ok");
@@ -97,6 +108,7 @@ async function doReset() {
     else if (e.status === 503) log("reset failed health-check — the lab was taken offline and an operator alerted.", "err");
     else log(`reset failed: ${e.message}`, "err");
   } finally {
+    clearInterval(hb);
     $("#refreshBtn").disabled = false;
     // Re-sync status (re-enables Reset only if not in maintenance / surfaces the
     // banner on a 503). Never let a status blip leave the button stuck disabled.
@@ -168,7 +180,7 @@ async function runOp(op, row) {
 
 async function loadCatalog() {
   try { renderCatalog(await api("GET", "/api/catalog")); }
-  catch (e) { $("#catalog").innerHTML = `<div class="loading">Could not load operations: ${e.message}</div>`; }
+  catch (e) { $("#catalog").innerHTML = `<div class="loading">Couldn't load the API operations — the lab may be waking up. Try Refresh in a moment.</div>`; }
 }
 
 // --- booking handoff: a ?session=<token> link from a reserved slot ------------
@@ -205,6 +217,6 @@ async function checkBookingSession() {
 (async () => {
   await checkBookingSession();
   try { await loadStatus(); }
-  catch (e) { $("#vms").innerHTML = `<div class="loading">Lab backend unreachable: ${e.message}</div>`; }
+  catch (e) { $("#vms").innerHTML = `<div class="loading">The lab is waking up — give it a moment, then click Refresh.</div>`; }
   loadCatalog();
 })();

@@ -71,7 +71,9 @@ HEALTH_RETRY_WAIT_S = 10    # seconds between attempts (vmstate restore is fast)
 
 # Guardrails
 RATE_LIMIT_WINDOW_S = 60
-RATE_LIMIT_MAX = 6          # per session/IP per window
+RATE_LIMIT_MAX = 30         # per real client-IP per window; ONLY mutating actions
+                           # (reset/create) count — cheap reads/lab.status are exempt,
+                           # so an engaged visitor browsing the playground never hits it.
 ACTION_TIMEOUT_S = 240     # hard wall-clock cap on a reset; MUST stay < the Tier-1
                            # portal proxy read timeout (300s) and the edge timeout,
                            # so a slow reset still returns a deterministic 503 in-window.
