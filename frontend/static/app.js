@@ -234,9 +234,11 @@ function fmtLeft(secs) {
 }
 
 function unlocked() {
-  if (!ME || !ME.email) return true; // identity not forwarded (yet): old behavior
-  if (ME.role === "admin" || ME.booking_exempt) return true;
-  return ME.booking && ME.booking.state === "active";
+  // Fail CLOSED: no verified identity -> no lab. The enclave is single-tenant, so
+  // the ONLY way in is to be the current occupant (your booked slot is live and
+  // you hold the lab). Admins are not exempt — they book like everyone else.
+  if (!ME || !ME.email) return false;
+  return !!(ME.booking && ME.booking.occupant_is_me);
 }
 
 function applyAccess() {
@@ -250,27 +252,30 @@ function applyAccess() {
     if (ME.sign_out) out.href = ME.sign_out;
   }
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-  const bp = $("#bookingPanel"), text = $("#bookingText"), cta = $("#bookingCTA"), cd = $("#bookingCountdown");
+  const bp = $("#bookingPanel"), text = $("#bookingText"), cta = $("#bookingCTA"),
+        cd = $("#bookingCountdown"), nowBtn = $("#bookNowBtn"), banner = $("#sessionBanner");
+
   if (unlocked()) {
     bp.hidden = true;
     panels.forEach((s) => { $(s).hidden = false; });
-    // A booked visitor (not an override account) sees how long the window runs.
-    if (ME && ME.email && !ME.booking_exempt && ME.role !== "admin" && b.state === "active") {
-      const banner = $("#sessionBanner");
-      banner.hidden = false;
-      banner.className = "session-banner ok";
-      const paint = () => {
-        const left = b.expires_at - Date.now() / 1000;
-        if (left <= 0) { location.reload(); return; }
-        banner.textContent = `🎟  Reserved session — the lab is yours until ${fmtTime(b.expires_at)} (${fmtLeft(left)} left).`;
-      };
-      paint();
-      tickTimer = setInterval(paint, 1000);
-    }
+    // The occupant sees how long the lab is theirs.
+    const until = b.expires_at || b.occupant_until;
+    banner.hidden = false;
+    banner.className = "session-banner ok";
+    const paint = () => {
+      const left = (until || 0) - Date.now() / 1000;
+      if (left <= 0) { location.reload(); return; }
+      banner.textContent = `🎟  Reserved session — the lab is yours until ${fmtTime(until)} (${fmtLeft(left)} left).`;
+    };
+    paint();
+    tickTimer = setInterval(paint, 1000);
     return true;
   }
+
   panels.forEach((s) => { $(s).hidden = true; });
   bp.hidden = false;
+  banner.hidden = true;
+
   if (b.state === "upcoming") {
     $("#bookingTitle").textContent = "Your session is booked";
     text.textContent = "The lab is reserved for one visitor at a time. This page unlocks automatically the moment your slot begins — leave it open, or come back at your time.";
@@ -283,10 +288,27 @@ function applyAccess() {
     };
     paint();
     tickTimer = setInterval(paint, 1000);
+  } else if (b.occupied && !b.occupant_is_me) {
+    // Someone else holds the single-tenant lab — even admins wait their turn.
+    $("#bookingTitle").textContent = "The lab is in use";
+    text.textContent = "Another visitor has the lab right now — it's one session at a time. Reserve a later slot below, or check back when it frees.";
+    cta.hidden = false;
+    nowBtn.hidden = true;           // can't start now while it's occupied
+    cd.hidden = false;
+    $("#bookIdentity").textContent = (ME && ME.email) || "";
+    const paint = () => {
+      const left = (b.occupant_until || 0) - Date.now() / 1000;
+      if (left <= 0) { location.reload(); return; }
+      cd.textContent = `In use for about ${fmtLeft(left)} more`;
+    };
+    paint();
+    tickTimer = setInterval(paint, 1000);
+    wireBooking();
   } else {
     $("#bookingTitle").textContent = "Reserve your session";
     text.textContent = "The whole lab is yours for a private window — one visitor at a time, reset to a clean baseline at the start. Booking is free; this page unlocks at your slot.";
     cta.hidden = false;
+    nowBtn.hidden = false;
     cd.hidden = true;
     $("#bookIdentity").textContent = (ME && ME.email) || "";
     wireBooking();

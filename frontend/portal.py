@@ -45,6 +45,17 @@ app = FastAPI(title="ise-lab-demo portal", docs_url=None, redoc_url=None)
 _client = httpx.AsyncClient(base_url=BACKEND, timeout=300.0)
 
 
+@app.middleware("http")
+async def _revalidate_static(request: Request, call_next):
+    # Make browsers revalidate the SPA assets so a deploy never leaves a visitor on
+    # a stale app.js (which once showed the full lab before the booking gate loaded).
+    resp = await call_next(request)
+    p = request.url.path
+    if p == "/" or p.endswith((".js", ".css", ".html")):
+        resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 def _identity(request: Request) -> tuple[str, set[str]]:
     """Edge-verified identity (email, groups). Absent headers (edge not yet
     forwarding identity) just mean anonymous — never an error."""

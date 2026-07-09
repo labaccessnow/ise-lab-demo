@@ -14,6 +14,12 @@ from threading import Lock
 _PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sessions.json")
 _lock = Lock()
 
+# "Start now" books the next slot boundary (≤5 min out); treat a booking whose
+# start is within this grace of now as already active so "now" feels immediate.
+# Scheduled future bookings just activate this many seconds early — harmless for a
+# single-tenant lab that resets at the slot anyway.
+_ACTIVE_GRACE_S = 330
+
 
 def _load() -> dict:
     try:
@@ -148,7 +154,7 @@ def state_for_email(email: str | None) -> dict:
         for s in live.values():
             if not _belongs_to(s, who):
                 continue
-            if _start_of(s) <= now:
+            if _start_of(s) <= now + _ACTIVE_GRACE_S:
                 best = ("active", s)
                 break
             if best is None or _start_of(s) < _start_of(best[1]):
@@ -165,19 +171,33 @@ def has_active(email: str | None) -> bool:
     return state_for_email(email).get("state") == "active"
 
 
-def active_emails() -> set[str]:
-    """Normalized emails holding a live (started, unexpired) session — the desired
-    membership of the Authentik lab-active group the desktop gate keys on."""
+def occupant() -> dict | None:
+    """The SINGLE identity that currently holds the lab, or None if it's free.
+
+    The enclave is one shared set of VMs (one jumpbox), so it is strictly
+    single-tenant: the occupant is the active booking with the earliest start.
+    Admins/testers are NOT implicit occupants — everyone books, so no one can
+    silently share an occupied lab. If two sessions somehow overlap (grace,
+    double-book), the earliest-start one wins and the other must wait."""
     now = time.time()
     with _lock:
         live = _prune(_load())
-    out: set[str] = set()
-    for s in live.values():
-        if _start_of(s) <= now:
-            for e in (s.get("claimed_by"), s.get("email")):
-                if _norm(e):
-                    out.add(_norm(e))
-    return out
+    active = [s for s in live.values() if _start_of(s) <= now + _ACTIVE_GRACE_S]
+    if not active:
+        return None
+    s = min(active, key=_start_of)
+    who = _norm(s.get("claimed_by")) or _norm(s.get("email"))
+    if not who:
+        return None
+    return {"email": who, "until": s.get("expires_at"), "lab_id": s.get("lab_id")}
+
+
+def active_emails() -> set[str]:
+    """Desired membership of the Authentik lab-active group the desktop gate keys
+    on — AT MOST the one current occupant, so the streamed desktop can never be
+    reached by two people at once."""
+    occ = occupant()
+    return {occ["email"]} if occ else set()
 
 
 def drop_uid(uid: str | None) -> int:
