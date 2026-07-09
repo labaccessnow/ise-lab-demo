@@ -110,6 +110,19 @@ async def cal_booking(request: Request):
     lab_id = _LAB_BY_EVENT.get(slug, _DEFAULT_LAB)
     window = f"{_fmt(starts_at)} → {_fmt(expires_at)}"
 
+    # Identity binding: a booking only grants the lab if its attendee email is a
+    # real, active (email-verified) member. The gated Cal.com page still takes a
+    # free-text attendee email, so without this a signed-in visitor could book for
+    # any address — pulling a portal link out of our mailer or seeding lab-active
+    # with an outsider. is_active_account fails OPEN (None) if Authentik is down so
+    # an outage doesn't break legitimate bookings.
+    if authentik_sync.is_active_account(email) is False:
+        await asyncio.to_thread(
+            alerts.notify,
+            f"🚫 Booking REJECTED — attendee {email} is not an active lab account "
+            f"({window}). No session minted.")
+        raise HTTPException(403, "attendee is not an active lab account")
+
     # A reschedule moves the existing session's window and re-keys it to the new
     # booking uid; if we never saw the original, fall through and mint fresh.
     if trigger == "BOOKING_RESCHEDULED":

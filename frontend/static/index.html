@@ -36,13 +36,23 @@
     <section class="panel booking" id="bookingPanel" hidden>
       <div class="panel-head"><h2 id="bookingTitle">Reserve your session</h2></div>
       <p class="hint" id="bookingText"></p>
-      <div class="action-row" id="bookingCTA" hidden>
-        <a class="btn primary" id="bookBtn" href="https://book.labaccessnow.com" target="_blank" rel="noopener">
-          <span class="label">Book your free lab slot</span>
-          <span class="sub">a private window on the whole lab — reset to a clean baseline for you</span>
-        </a>
-        <p class="hint">Pick any open time — you'll get a confirmation email with your session link, and this
-          page unlocks automatically when your slot starts.</p>
+      <div id="bookingCTA" hidden>
+        <div class="action-row">
+          <button class="btn primary" id="bookNowBtn" type="button">
+            <span class="label">Start my session now</span>
+            <span class="sub">reserve the whole lab for the next hour — reset to a clean baseline for you</span>
+          </button>
+          <p class="hint">One visitor at a time. The slot is booked to your account
+            (<span id="bookIdentity" class="mono"></span>) — you can't reserve it as anyone else — and this
+            page unlocks the moment it starts.</p>
+        </div>
+        <div class="action-row later">
+          <label class="later-label">Or pick a later time
+            <input type="datetime-local" id="bookWhen" />
+          </label>
+          <button class="btn" id="bookLaterBtn" type="button">Reserve</button>
+        </div>
+        <p class="bookmsg" id="bookMsg" hidden></p>
       </div>
       <div class="countdown" id="bookingCountdown" hidden></div>
     </section>

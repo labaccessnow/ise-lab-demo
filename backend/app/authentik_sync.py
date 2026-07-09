@@ -75,6 +75,26 @@ def _find_user(email: str) -> int | None:
     return None
 
 
+def is_active_account(email: str) -> bool | None:
+    """True if the email maps to an active (verified→activated) Authentik account,
+    False if it exists but is inactive, None if unknown/unresolvable. Used by the
+    webhook to refuse minting a session for an email that isn't a real member —
+    stops a gated-but-forged attendee address from pulling a booking link out of
+    our mailer or polluting the lab-active group. Fail-open (None) when Authentik
+    can't be reached, so an outage doesn't silently break all bookings."""
+    e = _norm(email)
+    if not (e and _URL and _token()):
+        return None
+    try:
+        data = _req("GET", f"/core/users/?search={urllib.parse.quote(e)}&page_size=20")
+    except SyncError:
+        return None
+    for u in data.get("results", []):
+        if _norm(u.get("email")) == e:
+            return bool(u.get("is_active"))
+    return False
+
+
 def reconcile(desired_emails: set[str]) -> dict:
     """Make lab-active membership == desired_emails. Idempotent and self-healing:
     a missed tick or backend restart converges on the next run. Bookings made

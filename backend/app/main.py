@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Body, FastAPI, Header, HTTPException
 
-from . import authentik_sync, catalog, guardrails, sessions
+from . import authentik_sync, calcom, catalog, guardrails, sessions
 from .actions import ACTIONS, LabUnavailable
 from .actions import maintenance_on as actions_maintenance_on
 from .devices import DeviceError
@@ -97,6 +97,33 @@ def booking_state(x_identity_email: str = Header(None)):
     the portal landing. Identity comes from the trusted portal, which took it
     from the edge-verified header; the response never includes the token."""
     return sessions.state_for_email(x_identity_email)
+
+
+@app.post("/api/book")
+def book_slot(payload: dict | None = Body(default=None),
+              x_identity_email: str = Header(None)):
+    """Book the lab for the EDGE-VERIFIED identity. The attendee email is taken
+    only from X-Identity-Email (set by the trusted portal from the Authentik
+    subrequest) — the client may pass a display name and a start time, never the
+    email. This is what makes the reservation identity-bound: you cannot book the
+    lab as anyone but yourself. Cal.com then fires its webhook, which mints the
+    slot-bound session exactly as for any booking."""
+    email = (x_identity_email or "").strip().lower()
+    if not email:
+        raise HTTPException(401, "sign in to book")
+    # Defense in depth: the edge already authenticated, but confirm the account is
+    # active (email-verified) before consuming a slot / mailing a link.
+    if authentik_sync.is_active_account(email) is False:
+        raise HTTPException(403, "account is not an active lab member")
+    start = (payload or {}).get("start") or calcom.next_slot_iso()
+    name = (payload or {}).get("name") or ""
+    try:
+        res = calcom.book(email, name, start)
+    except calcom.BookingError as e:
+        if e.conflict:
+            raise HTTPException(409, "That time isn't available — pick another slot.")
+        raise HTTPException(502, "Booking service is unavailable right now.")
+    return {"ok": True, **res}
 
 
 @app.get("/api/actions")

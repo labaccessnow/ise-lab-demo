@@ -107,6 +107,13 @@ nav a:hover { color: var(--fg); text-decoration: none; }
 /* booking landing */
 .panel.booking { border-color: var(--accent-2); }
 .countdown { font: 600 20px/1.4 ui-monospace, monospace; color: var(--accent); padding: 6px 0 2px; letter-spacing: .02em; }
+.mono { font-family: ui-monospace, monospace; color: var(--fg); }
+.action-row.later { display: flex; align-items: flex-end; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.later-label { color: var(--muted); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.later-label input { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 8px 11px; font: inherit; font-size: 13px; }
+.bookmsg { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+.bookmsg.ok { color: var(--ok); }
+.bookmsg.bad { color: var(--bad); }
 
 /* booking handoff banner */
 .session-banner { border-radius: 10px; padding: 12px 16px; margin: 18px 0 -2px; font-size: 14px; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); }

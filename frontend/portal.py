@@ -107,6 +107,34 @@ async def me(request: Request):
             "booking": booking, "book_url": BOOK_URL, "sign_out": SIGN_OUT_PATH}
 
 
+@app.post("/api/book")
+async def book(request: Request):
+    """Book the lab for the signed-in visitor. Identity is taken ONLY from the
+    edge-verified header and forwarded to the backend as X-Identity-Email; the
+    client body may carry a start time and display name, never the email — so a
+    visitor can only ever book the lab as themselves."""
+    email, groups = _identity(request)
+    if not email:
+        return JSONResponse(status_code=401, content={"detail": "Sign in to book."})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        r = await _client.post(
+            "/api/book",
+            headers={"X-Identity-Email": email},
+            json={"start": (body or {}).get("start"), "name": (body or {}).get("name")},
+        )
+    except httpx.HTTPError as e:
+        return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
+    try:
+        data = r.json()
+    except Exception:
+        data = {"detail": "backend returned non-JSON"}
+    return JSONResponse(status_code=r.status_code, content=data)
+
+
 @app.get("/api/actions")
 async def actions(request: Request, sid: str = Cookie(None)):
     return await _proxy("GET", "/api/actions", request, sid or uuid.uuid4().hex)

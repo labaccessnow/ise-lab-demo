@@ -285,12 +285,57 @@ function applyAccess() {
     tickTimer = setInterval(paint, 1000);
   } else {
     $("#bookingTitle").textContent = "Reserve your session";
-    text.textContent = "The whole lab is yours for a private window — one visitor at a time, reset to a clean baseline at the start. Booking is free and takes a minute; this page unlocks at your slot.";
+    text.textContent = "The whole lab is yours for a private window — one visitor at a time, reset to a clean baseline at the start. Booking is free; this page unlocks at your slot.";
     cta.hidden = false;
     cd.hidden = true;
-    if (ME && ME.book_url) $("#bookBtn").href = ME.book_url;
+    $("#bookIdentity").textContent = (ME && ME.email) || "";
+    wireBooking();
   }
   return false;
+}
+
+let bookingWired = false;
+function wireBooking() {
+  if (bookingWired) return;
+  bookingWired = true;
+  $("#bookNowBtn").addEventListener("click", () => doBook(null));
+  $("#bookLaterBtn").addEventListener("click", () => {
+    const v = $("#bookWhen").value;
+    if (!v) { showBookMsg("Pick a date and time first.", "bad"); return; }
+    doBook(new Date(v).toISOString());
+  });
+}
+
+function showBookMsg(text, cls) {
+  const el = $("#bookMsg");
+  el.hidden = false;
+  el.className = "bookmsg" + (cls ? " " + cls : "");
+  el.textContent = text;
+}
+
+async function doBook(startIso) {
+  const btns = [$("#bookNowBtn"), $("#bookLaterBtn")];
+  btns.forEach((b) => (b.disabled = true));
+  showBookMsg(startIso ? "Reserving your slot…" : "Starting your session…", "");
+  try {
+    const res = await api("POST", "/api/book", startIso ? { start: startIso } : {});
+    const when = res.start ? fmtTime(new Date(res.start).getTime() / 1000) : "your slot";
+    showBookMsg(`✓ Reserved for ${when}. Unlocking…`, "ok");
+    log(`lab reserved for ${when}`, "ok");
+    // The Cal.com webhook mints the session a moment later; poll /api/me until it
+    // shows, then re-render (active → unlocked, future → countdown).
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      await loadMe();
+      if (ME && ME.booking && ME.booking.state !== "none") break;
+    }
+    if (applyAccess()) { await loadStatus().catch(() => {}); loadCatalog(); }
+  } catch (e) {
+    btns.forEach((b) => (b.disabled = false));
+    if (e.status === 409) showBookMsg("That time was just taken — pick another.", "bad");
+    else if (e.status === 401) showBookMsg("Please sign in again to book.", "bad");
+    else showBookMsg("Couldn't book right now — try again in a moment.", "bad");
+  }
 }
 
 (async () => {
