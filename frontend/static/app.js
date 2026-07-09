@@ -331,20 +331,24 @@ function wireBooking() {
 // Session-length selector — shown only for tiers that get more than 1 hour
 // (paid / admin, per /api/me). Free demo stays a fixed 1-hour session.
 function renderDuration() {
-  const wrap = $("#durWrap"), sel = $("#durSel"), note = $("#durNote");
+  const wrap = $("#durWrap"), opts = $("#durOpts"), note = $("#durNote");
   if (!wrap) return;
   const max = (ME && ME.max_duration_min) || 60;
-  if (max <= 60) { wrap.hidden = true; selDuration = 60; return; }
+  if (max <= 60) { wrap.hidden = true; selDuration = 60; return; }  // free tier: fixed 1h
   wrap.hidden = false;
-  if (!sel.options.length) {
+  if (!opts.childElementCount) {
     for (let m = 60; m <= max; m += 60) {
-      const o = document.createElement("option");
-      o.value = String(m);
-      o.textContent = (m / 60) + (m === 60 ? " hour" : " hours");
-      sel.appendChild(o);
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "dur-opt" + (m === 60 ? " sel" : "");
+      b.textContent = (m / 60) + "h";
+      b.addEventListener("click", () => {
+        selDuration = m;
+        opts.querySelectorAll(".dur-opt").forEach((x) => x.classList.toggle("sel", x === b));
+      });
+      opts.appendChild(b);
     }
     selDuration = 60;
-    sel.addEventListener("change", () => { selDuration = parseInt(sel.value, 10) || 60; });
   }
   const daily = (ME && ME.daily_quota_min) || max;
   note.textContent = daily > 60 ? `up to ${daily / 60}h per day` : "";

@@ -115,10 +115,13 @@ nav a:hover { color: var(--fg); text-decoration: none; }
 .bookmsg.ok { color: var(--ok); }
 .bookmsg.bad { color: var(--bad); }
 
-/* session-length selector (paid/admin tiers) */
+/* session-length picker (paid/admin tiers) — quick hour buttons */
 .dur { margin: 14px 0 4px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.dur-label { color: var(--fg); font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; }
-.dur select { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 7px 10px; font: inherit; font-size: 13px; }
+.dur-label { color: var(--fg); font-size: 13.5px; }
+.dur-opts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.dur-opt { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 7px 13px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.dur-opt:hover { border-color: var(--accent); }
+.dur-opt.sel { border-color: var(--accent); background: rgba(90,169,255,.14); color: var(--accent); }
 .dur-note { font-size: 12.5px; }
 
 /* booking calendar */
