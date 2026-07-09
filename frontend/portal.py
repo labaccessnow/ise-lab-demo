@@ -30,6 +30,20 @@ from fastapi import Cookie, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+# Load a gitignored .env at the repo root so the booking-tier knobs (durations,
+# privileged groups) live in one editable file — mirrors the backend's config.py.
+# setdefault: a real environment var (e.g. systemd's BACKEND_URL) still wins.
+def _load_dotenv(path):
+    if os.path.exists(path):
+        for line in open(path):
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv(os.path.expanduser("~/ise-lab-demo/.env"))
+
 BACKEND = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 

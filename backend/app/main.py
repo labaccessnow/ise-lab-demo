@@ -115,7 +115,10 @@ def slots(date: str = ""):
     return calcom.day_slots(date, sessions.busy_ranges())
 
 
-_ALLOWED_DUR = [60, 120, 180, 240, 300, 360, 420, 480]
+# Hard ceiling the system supports = 24h (hourly steps). The ACTUAL cap is the
+# tier's soft cap sent by the portal (X-Booking-Max-Min, currently 8h) — so raising
+# paid users to 12h/24h later is a pure portal .env change, no code edit needed.
+_ALLOWED_DUR = [60 * h for h in range(1, 25)]  # 1h .. 24h
 
 
 @app.post("/api/book")
