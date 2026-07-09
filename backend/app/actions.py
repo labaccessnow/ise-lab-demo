@@ -96,16 +96,18 @@ def _take_offline(reason: str):
     raise LabUnavailable(reason + " — lab taken offline.")
 
 
-def _reset(px, params):
+def _reset(px, params, budget=None):
     """Roll every enclave VM back to golden, WAIT for completion, then verify the
-    lab actually came up healthy. Bounded by ACTION_TIMEOUT_S so the client always
-    gets a deterministic answer inside the portal proxy window. On persistent
-    failure: take the lab offline + alert, so a visitor never lands on a half-broken
-    lab."""
+    lab actually came up healthy. Bounded by `budget` seconds (default
+    ACTION_TIMEOUT_S, which fits the portal proxy window for a visitor-triggered
+    reset). The background hand-off reset passes a larger budget since it isn't
+    bound by the proxy. On persistent failure: take the lab offline + alert, so a
+    visitor never lands on a half-broken lab."""
     if maintenance_on():
         raise LabUnavailable("Lab is in maintenance (a prior reset failed). An admin must clear it.")
 
-    deadline = time.time() + ACTION_TIMEOUT_S
+    budget = budget or ACTION_TIMEOUT_S
+    deadline = time.time() + budget
 
     done = []
     rollback_failed = []
@@ -124,7 +126,7 @@ def _reset(px, params):
         if outcome == "FAILED":
             rollback_failed.append(ENCLAVE_VMS.get(vmid, vmid))
         if time.time() >= deadline:
-            _take_offline(f"reset exceeded {ACTION_TIMEOUT_S}s budget during rollbacks")
+            _take_offline(f"reset exceeded {budget}s budget during rollbacks")
 
     # Verify-after: poll device health until healthy, budget hit, or retries spent.
     # Health is authoritative — a 'slow' rollback that nonetheless came up healthy

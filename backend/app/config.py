@@ -74,6 +74,10 @@ RATE_LIMIT_WINDOW_S = 60
 RATE_LIMIT_MAX = 30         # per real client-IP per window; ONLY mutating actions
                            # (reset/create) count — cheap reads/lab.status are exempt,
                            # so an engaged visitor browsing the playground never hits it.
-ACTION_TIMEOUT_S = 240     # hard wall-clock cap on a reset; MUST stay < the Tier-1
-                           # portal proxy read timeout (300s) and the edge timeout,
-                           # so a slow reset still returns a deterministic 503 in-window.
+ACTION_TIMEOUT_S = 240     # hard wall-clock cap on a VISITOR-triggered reset; MUST stay
+                           # < the Tier-1 portal proxy read timeout (300s) and the edge
+                           # timeout, so a slow reset still returns a deterministic 503.
+# The background hand-off reset (reset-on-tenant-change) isn't bound by the proxy
+# window, so it gets a generous budget — a full 8-VM golden rollback (vmstate) runs
+# well past 240s. Tune if the enclave grows.
+RESET_HANDOFF_BUDGET_S = int(os.environ.get("RESET_HANDOFF_BUDGET_S", "600"))

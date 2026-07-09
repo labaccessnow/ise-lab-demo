@@ -233,12 +233,18 @@ function fmtLeft(secs) {
   return h ? `${h}h ${String(m).padStart(2, "0")}m` : (m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`);
 }
 
+let pollTimer = null;
+async function refreshAccess() {
+  await loadMe();
+  if (applyAccess()) { await loadStatus().catch(() => {}); loadCatalog(); }
+}
+
 function unlocked() {
   // Fail CLOSED: no verified identity -> no lab. The enclave is single-tenant, so
-  // the ONLY way in is to be the current occupant (your booked slot is live and
-  // you hold the lab). Admins are not exempt — they book like everyone else.
+  // the ONLY way in is to be the current occupant AND for the lab to be prepared
+  // (golden-reset) for you. Admins are not exempt — they book like everyone else.
   if (!ME || !ME.email) return false;
-  return !!(ME.booking && ME.booking.occupant_is_me);
+  return !!(ME.booking && ME.booking.occupant_is_me && ME.booking.lab_ready);
 }
 
 function applyAccess() {
@@ -253,6 +259,7 @@ function applyAccess() {
     if (ME.sign_out) out.href = ME.sign_out;
   }
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   const bp = $("#bookingPanel"), text = $("#bookingText"), cta = $("#bookingCTA"),
         cd = $("#bookingCountdown"), nowBtn = $("#bookNowBtn"), banner = $("#sessionBanner");
 
@@ -277,7 +284,22 @@ function applyAccess() {
   bp.hidden = false;
   banner.hidden = true;
 
-  if (b.state === "upcoming") {
+  if (b.occupant_is_me && b.maintenance) {
+    // Occupant, but the hand-off reset failed and the lab is offline for repair.
+    $("#bookingTitle").textContent = "Lab is temporarily offline";
+    text.textContent = "The lab hit a snag while preparing and an operator has been alerted. Your session resumes automatically once it's back — no action needed.";
+    cta.hidden = true;
+    cd.hidden = true;
+    pollTimer = setInterval(refreshAccess, 8000);
+  } else if (b.occupant_is_me && !b.lab_ready) {
+    // Occupant, enclave being golden-reset to a clean baseline for them.
+    $("#bookingTitle").textContent = "Preparing your lab…";
+    text.textContent = "Resetting the enclave to a clean baseline just for you — about 2–3 minutes. This page unlocks automatically when it's ready.";
+    cta.hidden = true;
+    cd.hidden = false;
+    cd.textContent = "⟳ Preparing a fresh lab…";
+    pollTimer = setInterval(refreshAccess, 5000);
+  } else if (b.state === "upcoming") {
     $("#bookingTitle").textContent = "Your session is booked";
     text.textContent = "Your session starts soon — this page unlocks automatically when it does. Leave it open, come back at your time, or reserve more time below.";
     cd.hidden = false;

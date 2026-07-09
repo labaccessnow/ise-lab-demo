@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Body, FastAPI, Header, HTTPException
 
-from . import authentik_sync, calcom, catalog, guardrails, sessions
+from . import authentik_sync, calcom, catalog, guardrails, sessions, tenancy
 from .actions import ACTIONS, LabUnavailable
 from .actions import maintenance_on as actions_maintenance_on
 from .devices import DeviceError
@@ -33,9 +33,18 @@ async def _lifespan(_app: FastAPI):
                     authentik_sync.reconcile, sessions.active_emails())
                 if res.get("added") or res.get("removed") or res.get("no_account"):
                     print(f"[lab-active] {res}")
+                # Auto reset-on-tenant-change: when a NEW occupant holds the lab and
+                # the enclave isn't already prepared for them, golden-reset it in the
+                # background (single-flight via the preparing flag) so they never
+                # inherit the last person's lab. Same user resumes untouched.
+                occ = sessions.occupant()
+                if occ and tenancy.claim_preparing(occ["email"]):
+                    print(f"[tenancy] new occupant {occ['email']} — preparing enclave")
+                    asyncio.create_task(
+                        asyncio.to_thread(tenancy.run_prepare, occ["email"], px()))
             except Exception as e:
-                print(f"[lab-active] sync failed: {e}")
-            await asyncio.sleep(60)
+                print(f"[loop] iteration failed: {e}")
+            await asyncio.sleep(30)
     task = asyncio.create_task(loop())
     yield
     task.cancel()
@@ -103,6 +112,13 @@ def booking_state(x_identity_email: str = Header(None)):
     st["occupied"] = bool(occ)
     st["occupant_is_me"] = bool(occ and occ["email"] == me)
     st["occupant_until"] = occ["until"] if occ else None
+    # Hand-off readiness: the lab controls unlock only once the enclave has been
+    # golden-reset for THIS occupant (or resumed for the same user). While that
+    # reset runs the portal shows a "preparing your lab" screen.
+    ten = tenancy.status_for(me)
+    st["lab_ready"] = bool(st["occupant_is_me"] and ten["ready"])
+    st["lab_preparing"] = bool(st["occupant_is_me"] and not ten["ready"] and not actions_maintenance_on())
+    st["maintenance"] = actions_maintenance_on()
     return st
 
 
@@ -221,6 +237,10 @@ def run_action(action_id: str,
             if occ:
                 raise HTTPException(409, "The lab is in use by another session right now — it's one visitor at a time.")
             raise HTTPException(403, "The lab is reserved one session at a time — book your slot to take the controls.")
+        # The enclave is golden-reset for each new occupant; don't let them drive it
+        # until that hand-off reset has finished (the portal shows "preparing").
+        if not tenancy.status_for(me)["ready"]:
+            raise HTTPException(409, "Your lab is still being prepared — give it a moment.")
     # Rate-limit ONLY the expensive mutating actions (reset/create), keyed on the
     # real client IP the edge forwards (X-Client-IP) — NOT a client-chosen session
     # id, which a script trivially rotates to bypass the cap. Cheap reads
@@ -235,7 +255,12 @@ def run_action(action_id: str,
         except guardrails.Busy as e:
             raise HTTPException(409, str(e))
     try:
-        return {"action": action_id, "result": act.fn(px(), payload or {})}
+        result = act.fn(px(), payload or {})
+        # A manual reset by the occupant re-baselines their own session — keep the
+        # lab theirs so it isn't immediately re-prepared out from under them.
+        if action_id == "lab.reset":
+            tenancy.mark_owner((x_identity_email or "").strip().lower())
+        return {"action": action_id, "result": result}
     except LabUnavailable as e:
         raise HTTPException(503, str(e))
     except (ProxmoxError, DeviceError) as e:
