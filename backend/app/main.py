@@ -241,6 +241,12 @@ def run_action(action_id: str,
         # until that hand-off reset has finished (the portal shows "preparing").
         if not tenancy.status_for(me)["ready"]:
             raise HTTPException(409, "Your lab is still being prepared — give it a moment.")
+    # Manual reset routes through the background hand-off path (drop ownership so the
+    # reconciler re-prepares) — reuses the "preparing" screen and the generous
+    # background reset budget instead of the 240s proxy-bound synchronous reset.
+    if action_id == "lab.reset":
+        tenancy.request_manual_reset((x_identity_email or "").strip().lower())
+        return {"action": action_id, "result": {"preparing": True}}
     # Rate-limit ONLY the expensive mutating actions (reset/create), keyed on the
     # real client IP the edge forwards (X-Client-IP) — NOT a client-chosen session
     # id, which a script trivially rotates to bypass the cap. Cheap reads
@@ -255,12 +261,7 @@ def run_action(action_id: str,
         except guardrails.Busy as e:
             raise HTTPException(409, str(e))
     try:
-        result = act.fn(px(), payload or {})
-        # A manual reset by the occupant re-baselines their own session — keep the
-        # lab theirs so it isn't immediately re-prepared out from under them.
-        if action_id == "lab.reset":
-            tenancy.mark_owner((x_identity_email or "").strip().lower())
-        return {"action": action_id, "result": result}
+        return {"action": action_id, "result": act.fn(px(), payload or {})}
     except LabUnavailable as e:
         raise HTTPException(503, str(e))
     except (ProxmoxError, DeviceError) as e:

@@ -82,42 +82,19 @@ async function loadStatus() {
 
 async function doReset() {
   const btn = $("#resetBtn");
-  if (!confirm("Reset the lab? Every enclave VM rolls back to the golden snapshot — any changes you made are wiped, and your lab-desktop tab (if open) will disconnect and need reopening.")) return;
+  if (!confirm("Reset the lab? Every enclave VM rolls back to the golden snapshot — any changes you made are wiped, and your lab-desktop tab (if open) will disconnect. Takes about 2–3 minutes; the page shows progress and unlocks when it's ready.")) return;
   btn.disabled = true;
-  $("#refreshBtn").disabled = true;
-  // Reset blocks for ~2-3 min (rollback + health-check); show a live heartbeat so
-  // the screen never looks hung. Cleared in finally on success or failure.
-  const t0 = Date.now();
-  const hb = setInterval(() => {
-    log(`  …still working — ${Math.round((Date.now() - t0) / 1000)}s elapsed (rolling back + health-checking each device)`, "dim");
-  }, 15000);
+  log("reset requested — preparing a clean lab…");
   try {
-    log("reset requested — rolling back to golden and verifying the lab…");
-    log("this takes about 2–3 minutes; the page updates automatically when it's done…", "dim");
-    // The backend now blocks until every VM is rolled back AND the lab is verified
-    // healthy, so this response means the lab is genuinely ready (or it 503s).
-    const { result } = await api("POST", "/api/action/lab.reset");
-    for (const r of result.reset) {
-      if (r.skipped) log(`  ${r.name}: skipped (${r.skipped})`, "err");
-      else log(`  ${r.name}: rolled back ${r.rollback}`, (r.rollback === "ok" || r.rollback === "slow") ? "dim" : "err");
-    }
-    // Backend now blocks until verified; a 200 always means health === "ok".
-    log("lab reset complete and verified healthy — ready to drive again.", "ok");
+    // Routes through the background hand-off path: the backend drops ownership and
+    // the reconciler re-prepares. We then show the "preparing your lab" screen and
+    // poll to ready — no proxy timeout, and it reuses the generous background budget.
+    await api("POST", "/api/action/lab.reset");
+    await refreshAccess();
   } catch (e) {
+    btn.disabled = false;
     if (e.status === 409) log("a reset is already in progress — please wait.", "err");
-    else if (e.status === 503) log("reset failed health-check — the lab was taken offline and an operator alerted.", "err");
-    else log(`reset failed: ${e.message}`, "err");
-  } finally {
-    clearInterval(hb);
-    $("#refreshBtn").disabled = false;
-    // Re-sync status (re-enables Reset only if not in maintenance / surfaces the
-    // banner on a 503). Never let a status blip leave the button stuck disabled.
-    try {
-      await loadStatus();
-    } catch (_) {
-      btn.disabled = false;
-      log("couldn't refresh lab status — click Refresh to retry.", "err");
-    }
+    else log(`couldn't start reset: ${e.message}`, "err");
   }
 }
 

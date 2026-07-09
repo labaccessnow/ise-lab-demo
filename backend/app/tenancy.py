@@ -96,14 +96,18 @@ def run_prepare(email, px) -> bool:
     return ok
 
 
-def mark_owner(email) -> None:
-    """A manual reset by the current occupant keeps the lab theirs — they just
-    re-baselined their own session, so no hand-off reset is owed."""
+def request_manual_reset(email) -> bool:
+    """The occupant explicitly asked to reset mid-session. Drop ownership so the
+    reconciler re-prepares the enclave on its next tick — same background reset,
+    generous budget, and 'preparing' screen as a hand-off, so a manual reset isn't
+    bound by the proxy timeout either. No-op if a prepare is already running."""
     me = _norm(email)
     if not me:
-        return
+        return False
     with _lock:
         d = _load()
-        d["owner"] = me
-        d["prepared_at"] = time.time()
+        if d.get("preparing"):
+            return False
+        d["owner"] = None
         _save(d)
+    return True
