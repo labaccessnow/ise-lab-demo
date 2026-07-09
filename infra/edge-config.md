@@ -19,21 +19,28 @@ edge. Set it above the chain (edge 330 > portal proxy 300 > backend 240):
 lab.labaccessnow.com_REVERSE_PROXY_READ_TIMEOUT: "330s"
 ```
 
-## 2. Forward the authenticated identity to the portal (single-use session binding)
-The portal binds a booking token to the Authentik-verified email (so a forwarded
-`?session=` link is useless to anyone else). For that, the edge must capture the
-email from the Authentik auth subrequest and pass it upstream as
-`X-Forwarded-Email`, and MUST strip any client-supplied copy of that header so a
-visitor can't spoof an identity. Mirror the existing `_999` auth-subrequest
-wiring; add an `AUTH_REQUEST_SET` that captures the Authentik response header and
-a `REVERSE_PROXY_HEADERS` that forwards it. Until this is in place the portal's
-claim step fails closed (403), so the booking flow falls back to the current
-presence/expiry validation — nothing breaks, the binding just isn't enforced yet.
+## 2. Forward the authenticated identity to the portal (APPLIED)
+The portal trusts `X-Forwarded-Email` / `X-Forwarded-Groups` for identity, role
+(admin group) and the booking gate, so the edge must set them from the Authentik
+auth subrequest — and, critically, override any client-supplied copies (nginx's
+`proxy_set_header` does both at once). Alongside the existing `_999`
+auth-subrequest wiring:
 
-After applying #2, wire the frontend to POST the `?session=` token to
-`/api/session/claim` on load, and decide whether a valid bound session should be
-REQUIRED for visitor actions (mandatory-booking) vs. the current "any
-Authentik-authenticated user can drive the lab" model — a product decision.
+```yaml
+lab.labaccessnow.com_REVERSE_PROXY_AUTH_REQUEST_SET: "$$auth_email $$upstream_http_x_authentik_email;$$auth_groups $$upstream_http_x_authentik_groups"
+lab.labaccessnow.com_REVERSE_PROXY_HEADERS: "X-Forwarded-Email $$auth_email;X-Forwarded-Groups $$auth_groups"
+```
+
+Two companion pieces this relies on:
+- **The portal host firewalls :8080 to the edge's IP only.** Anything else on
+  the DMZ segment could otherwise skip the edge and hand the portal spoofed
+  identity headers.
+- **Access model (decided):** any authenticated user may browse the portal
+  (reads); MUTATING actions require a booking window that is active right now,
+  with two Authentik-group overrides — the admin group (`lab-admins`) and the
+  tester group (`lab-approved`). The backend enforces this; the streamed
+  desktop is enforced by Authentik itself via the reconciler-managed
+  `lab-active` group (members == identities with a live booked session).
 
 ## Policy defaults already coded (confirm / adjust)
 - Identity source: Authentik email (`X-Forwarded-Email`), normalized (trim+lowercase).

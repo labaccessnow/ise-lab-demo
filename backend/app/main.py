@@ -8,16 +8,41 @@ Auth here is intentionally a stub (X-Role / X-Session headers set by the trusted
 portal). Real visitor/admin auth (Authelia + demo-session token) lands in Phase 6;
 this service must only ever be reachable from the portal, never the internet.
 """
+import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import Body, FastAPI, Header, HTTPException
 
-from . import catalog, guardrails, sessions
+from . import authentik_sync, catalog, guardrails, sessions
 from .actions import ACTIONS, LabUnavailable
 from .actions import maintenance_on as actions_maintenance_on
 from .devices import DeviceError
 from .proxmox import Proxmox, ProxmoxError
 from .webhook import router as webhook_router
 
-app = FastAPI(title="ise-lab-demo backend", docs_url=None, redoc_url=None)
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Background reconciler: keeps the Authentik lab-active group equal to
+    # "bookings running right now", so the group-gated desktop opens at slot
+    # start and closes at slot end with no operator action.
+    async def loop():
+        while True:
+            try:
+                res = await asyncio.to_thread(
+                    authentik_sync.reconcile, sessions.active_emails())
+                if res.get("added") or res.get("removed") or res.get("no_account"):
+                    print(f"[lab-active] {res}")
+            except Exception as e:
+                print(f"[lab-active] sync failed: {e}")
+            await asyncio.sleep(60)
+    task = asyncio.create_task(loop())
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="ise-lab-demo backend", docs_url=None, redoc_url=None,
+              lifespan=_lifespan)
 app.include_router(webhook_router)
 
 _px: Proxmox | None = None
@@ -66,6 +91,14 @@ def session_claim(payload: dict | None = Body(default=None),
     return res
 
 
+@app.get("/api/booking-state")
+def booking_state(x_identity_email: str = Header(None)):
+    """The verified identity's booking picture (active / upcoming / none) for
+    the portal landing. Identity comes from the trusted portal, which took it
+    from the edge-verified header; the response never includes the token."""
+    return sessions.state_for_email(x_identity_email)
+
+
 @app.get("/api/actions")
 def list_actions(x_role: str = Header("visitor")):
     return {
@@ -80,7 +113,9 @@ def run_action(action_id: str,
                payload: dict | None = Body(default=None),
                x_role: str = Header("visitor"),
                x_session: str = Header("anon"),
-               x_client_ip: str = Header(None)):
+               x_client_ip: str = Header(None),
+               x_identity_email: str = Header(None),
+               x_booking_exempt: str = Header("0")):
     act = ACTIONS.get(action_id)
     if act is None:
         raise HTTPException(404, "unknown action")
@@ -91,6 +126,13 @@ def run_action(action_id: str,
     # the maintenance banner. Admin recovery actions (clear_maintenance) stay open.
     if act.role == "visitor" and action_id != "lab.status" and actions_maintenance_on():
         raise HTTPException(503, "Lab is temporarily offline for maintenance. Please try again later.")
+    # The lab is driven in reserved slots (the enclave is single-tenant): anything
+    # MUTATING needs a booking that is active right now. Admins and the tester
+    # override group are exempt; reads stay open so a signed-in visitor can browse
+    # state while deciding to book.
+    if (act.mutating and x_role != "admin" and x_booking_exempt != "1"
+            and not sessions.has_active(x_identity_email)):
+        raise HTTPException(403, "This lab runs in reserved sessions — book your free slot to take the controls.")
     # Rate-limit ONLY the expensive mutating actions (reset/create), keyed on the
     # real client IP the edge forwards (X-Client-IP) — NOT a client-chosen session
     # id, which a script trivially rotates to bypass the cap. Cheap reads

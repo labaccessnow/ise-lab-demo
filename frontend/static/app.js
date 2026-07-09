@@ -184,10 +184,6 @@ async function loadCatalog() {
 }
 
 // --- booking handoff: a ?session=<token> link from a reserved slot ------------
-function setCookie(name, value, maxAge) {
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; samesite=lax`;
-}
-
 async function checkBookingSession() {
   const url = new URL(location.href);
   const token = url.searchParams.get("session");
@@ -197,25 +193,110 @@ async function checkBookingSession() {
   banner.className = "session-banner";
   banner.textContent = "checking your booking…";
   try {
-    const s = await api("GET", `/api/session/${encodeURIComponent(token)}`);
-    if (!s || !s.valid) throw new Error("invalid");
-    setCookie("sid", token, 86400);
-    const until = new Date(s.expires_at * 1000)
-      .toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    // Claim binds the token to the signed-in identity server-side; the browser
+    // only ever gets an httponly sid cookie back, never the token again.
+    const s = await api("POST", "/api/session/claim", { token });
+    const until = fmtTime(s.expires_at);
     banner.className = "session-banner ok";
-    banner.textContent = `🎟  Reserved lab session active — your booked time runs until ${until}.`;
+    banner.textContent = `🎟  Reserved lab session claimed — your booked time runs until ${until}.`;
     log(`booked session active until ${until}`, "ok");
-  } catch (_) {
+  } catch (e) {
     banner.className = "session-banner bad";
-    banner.textContent = "This booking link is invalid or has expired — book again to reserve a fresh slot.";
+    banner.textContent = (e.status === 403)
+      ? "This booking link belongs to a different signed-in account, or has expired — sign in with the email you booked with, or book a fresh slot."
+      : "This booking link is invalid or has expired — book again to reserve a fresh slot.";
   }
   // strip the token from the address bar so it isn't re-shared or re-run on refresh
   url.searchParams.delete("session");
   history.replaceState({}, "", url.pathname + url.search);
 }
 
+// --- identity + booking-state gate --------------------------------------------
+// The portal tells us who the edge verified us as and whether a booked window is
+// none / upcoming / active. The UI mirrors what the backend enforces: visitors
+// without an active booking get the booking landing, not the lab controls.
+let ME = null;
+let tickTimer = null;
+
+async function loadMe() {
+  try { ME = await api("GET", "/api/me"); }
+  catch (_) { ME = null; } // /api/me unavailable -> legacy behavior (show the lab)
+}
+
+function fmtTime(ts) {
+  return new Date(ts * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtLeft(secs) {
+  secs = Math.max(0, Math.floor(secs));
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : (m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`);
+}
+
+function unlocked() {
+  if (!ME || !ME.email) return true; // identity not forwarded (yet): old behavior
+  if (ME.role === "admin" || ME.booking_exempt) return true;
+  return ME.booking && ME.booking.state === "active";
+}
+
+function applyAccess() {
+  const b = (ME && ME.booking) || { state: "none" };
+  const panels = ["#statusPanel", "#actionsPanel", "#playgroundPanel"];
+  if (ME && ME.email) {
+    const who = $("#whoami"), out = $("#signOut");
+    who.hidden = false;
+    who.textContent = ME.email + (ME.role === "admin" ? " · admin" : "");
+    out.hidden = false;
+    if (ME.sign_out) out.href = ME.sign_out;
+  }
+  if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  const bp = $("#bookingPanel"), text = $("#bookingText"), cta = $("#bookingCTA"), cd = $("#bookingCountdown");
+  if (unlocked()) {
+    bp.hidden = true;
+    panels.forEach((s) => { $(s).hidden = false; });
+    // A booked visitor (not an override account) sees how long the window runs.
+    if (ME && ME.email && !ME.booking_exempt && ME.role !== "admin" && b.state === "active") {
+      const banner = $("#sessionBanner");
+      banner.hidden = false;
+      banner.className = "session-banner ok";
+      const paint = () => {
+        const left = b.expires_at - Date.now() / 1000;
+        if (left <= 0) { location.reload(); return; }
+        banner.textContent = `🎟  Reserved session — the lab is yours until ${fmtTime(b.expires_at)} (${fmtLeft(left)} left).`;
+      };
+      paint();
+      tickTimer = setInterval(paint, 1000);
+    }
+    return true;
+  }
+  panels.forEach((s) => { $(s).hidden = true; });
+  bp.hidden = false;
+  if (b.state === "upcoming") {
+    $("#bookingTitle").textContent = "Your session is booked";
+    text.textContent = "The lab is reserved for one visitor at a time. This page unlocks automatically the moment your slot begins — leave it open, or come back at your time.";
+    cta.hidden = true;
+    cd.hidden = false;
+    const paint = () => {
+      const left = b.starts_at - Date.now() / 1000;
+      if (left <= 0) { location.reload(); return; }
+      cd.textContent = `Starts ${fmtTime(b.starts_at)} — in ${fmtLeft(left)}`;
+    };
+    paint();
+    tickTimer = setInterval(paint, 1000);
+  } else {
+    $("#bookingTitle").textContent = "Reserve your session";
+    text.textContent = "The whole lab is yours for a private window — one visitor at a time, reset to a clean baseline at the start. Booking is free and takes a minute; this page unlocks at your slot.";
+    cta.hidden = false;
+    cd.hidden = true;
+    if (ME && ME.book_url) $("#bookBtn").href = ME.book_url;
+  }
+  return false;
+}
+
 (async () => {
   await checkBookingSession();
+  await loadMe();
+  if (!applyAccess()) return; // locked: the booking landing is showing
   try { await loadStatus(); }
   catch (e) { $("#vms").innerHTML = `<div class="loading">The lab is waking up — give it a moment, then click Refresh.</div>`; }
   loadCatalog();

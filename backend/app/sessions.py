@@ -35,14 +35,23 @@ def _prune(d: dict) -> dict:
     return {k: v for k, v in d.items() if v.get("expires_at", 0) > now}
 
 
-def mint(lab_id: str, email: str, expires_at: float) -> str:
-    """Create a session token valid until expires_at (unix seconds)."""
+def mint(lab_id: str, email: str, expires_at: float,
+         starts_at: float | None = None, uid: str = "") -> str:
+    """Create a session token for a booked slot window.
+
+    ``starts_at`` is the slot start (unix seconds) — before it the booking is
+    "upcoming" and grants nothing; omitted means "starts now" (legacy records
+    without the field behave the same via ``created``). ``uid`` is the Cal.com
+    booking uid so a cancellation/reschedule can find the session it minted.
+    """
     tok = "booking_" + uuid.uuid4().hex
+    now = time.time()
     with _lock:
         d = _prune(_load())
         d[tok] = {
-            "lab_id": lab_id, "email": email,
-            "expires_at": float(expires_at), "created": time.time(),
+            "lab_id": lab_id, "email": email, "uid": uid,
+            "starts_at": float(starts_at) if starts_at else now,
+            "expires_at": float(expires_at), "created": now,
         }
         _save(d)
     return tok
@@ -114,3 +123,92 @@ def validate_sid(server_sid: str | None) -> dict | None:
             if s.get("server_sid") == server_sid and s.get("expires_at", 0) > now:
                 return s
     return None
+
+
+def _start_of(s: dict) -> float:
+    # Legacy records (pre starts_at) were active from the moment they were minted.
+    return s.get("starts_at") or s.get("created") or 0
+
+
+def _belongs_to(s: dict, who: str) -> bool:
+    # A session is "yours" if you booked it or you're the identity that claimed it.
+    return bool(who) and who in {_norm(s.get("email")), _norm(s.get("claimed_by"))}
+
+
+def state_for_email(email: str | None) -> dict:
+    """The booking picture for a verified identity: the ACTIVE session if one is
+    live now, else the soonest UPCOMING one, else none. Never exposes the token —
+    this feeds the portal UI, and the UI must not be able to leak a usable link."""
+    who = _norm(email)
+    now = time.time()
+    best = None
+    if who:
+        with _lock:
+            live = _prune(_load())
+        for s in live.values():
+            if not _belongs_to(s, who):
+                continue
+            if _start_of(s) <= now:
+                best = ("active", s)
+                break
+            if best is None or _start_of(s) < _start_of(best[1]):
+                best = ("upcoming", s)
+    if best is None:
+        return {"state": "none"}
+    state, s = best
+    return {"state": state, "lab_id": s.get("lab_id"),
+            "starts_at": _start_of(s), "expires_at": s.get("expires_at")}
+
+
+def has_active(email: str | None) -> bool:
+    """True when the identity's booked window is running right now."""
+    return state_for_email(email).get("state") == "active"
+
+
+def active_emails() -> set[str]:
+    """Normalized emails holding a live (started, unexpired) session — the desired
+    membership of the Authentik lab-active group the desktop gate keys on."""
+    now = time.time()
+    with _lock:
+        live = _prune(_load())
+    out: set[str] = set()
+    for s in live.values():
+        if _start_of(s) <= now:
+            for e in (s.get("claimed_by"), s.get("email")):
+                if _norm(e):
+                    out.add(_norm(e))
+    return out
+
+
+def drop_uid(uid: str | None) -> int:
+    """Remove the session(s) minted for a cancelled booking uid. Returns count."""
+    if not uid:
+        return 0
+    with _lock:
+        d = _load()
+        doomed = [k for k, v in d.items() if v.get("uid") == uid]
+        for k in doomed:
+            del d[k]
+        if doomed:
+            _save(d)
+    return len(doomed)
+
+
+def reschedule_uid(uid: str | None, starts_at: float, expires_at: float,
+                   new_uid: str = "") -> bool:
+    """Move an existing booking's window (Cal.com reschedule) and re-key it to
+    the new booking uid so a later cancel finds it. False if unknown — the
+    caller then mints a fresh session instead."""
+    if not uid:
+        return False
+    with _lock:
+        d = _load()
+        hit = False
+        for v in d.values():
+            if v.get("uid") == uid:
+                v["starts_at"], v["expires_at"] = float(starts_at), float(expires_at)
+                v["uid"] = new_uid or v.get("uid")
+                hit = True
+        if hit:
+            _save(d)
+    return hit
