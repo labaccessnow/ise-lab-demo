@@ -69,6 +69,8 @@ def _limits(groups: set[str]) -> tuple[int, int]:
     return FREE_SESSION_MIN, FREE_DAILY_MIN
 BOOK_URL = os.environ.get(
     "BOOK_URL", "https://book.labaccessnow.com/labaccessnow/self-service-lab")
+# "Home" link in the portal header — back to the main site. Configurable in .env.
+HOME_URL = os.environ.get("HOME_URL", "https://labaccessnow.com")
 # The embedded-outpost sign-out path; the edge proxies /outpost.goauthentik.io/.
 SIGN_OUT_PATH = "/outpost.goauthentik.io/sign_out"
 
@@ -148,7 +150,8 @@ async def me(request: Request):
     return {"email": email, "role": _role(groups),
             "booking_exempt": bool(EXEMPT_GROUPS & groups),
             "max_duration_min": per, "daily_quota_min": daily,
-            "booking": booking, "book_url": BOOK_URL, "sign_out": SIGN_OUT_PATH}
+            "booking": booking, "book_url": BOOK_URL, "home_url": HOME_URL,
+            "sign_out": SIGN_OUT_PATH}
 
 
 @app.get("/api/slots")

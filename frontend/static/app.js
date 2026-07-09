@@ -244,6 +244,7 @@ function unlocked() {
 function applyAccess() {
   const b = (ME && ME.booking) || { state: "none" };
   const panels = ["#statusPanel", "#actionsPanel", "#playgroundPanel"];
+  if (ME && ME.home_url) { const h = $("#homeLink"); if (h) h.href = ME.home_url; }
   if (ME && ME.email) {
     const who = $("#whoami"), out = $("#signOut");
     who.hidden = false;
@@ -278,8 +279,7 @@ function applyAccess() {
 
   if (b.state === "upcoming") {
     $("#bookingTitle").textContent = "Your session is booked";
-    text.textContent = "The lab is reserved for one visitor at a time. This page unlocks automatically the moment your slot begins — leave it open, or come back at your time.";
-    cta.hidden = true;
+    text.textContent = "Your session starts soon — this page unlocks automatically when it does. Leave it open, come back at your time, or reserve more time below.";
     cd.hidden = false;
     const paint = () => {
       const left = b.starts_at - Date.now() / 1000;
@@ -288,6 +288,11 @@ function applyAccess() {
     };
     paint();
     tickTimer = setInterval(paint, 1000);
+    cta.hidden = false;          // let them reserve additional time while they wait
+    nowBtn.hidden = false;
+    $("#bookIdentity").textContent = (ME && ME.email) || "";
+    wireBooking();
+    renderDuration();
   } else if (b.occupied && !b.occupant_is_me) {
     // Someone else holds the single-tenant lab — even admins wait their turn.
     $("#bookingTitle").textContent = "The lab is in use";

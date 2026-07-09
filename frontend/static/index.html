@@ -13,6 +13,7 @@
     <div class="wrap">
       <span class="brand">ise<span class="dot">·</span>lab<span class="muted">-demo</span></span>
       <nav>
+        <a href="https://labaccessnow.com" id="homeLink">Home</a>
         <a href="https://github.labaccessnow.com/ise-lab-demo/" target="_blank" rel="noopener">Docs</a>
         <a href="https://github.com/labaccessnow/ise-lab-demo" target="_blank" rel="noopener">Source</a>
         <span class="whoami" id="whoami" hidden></span>
@@ -36,6 +37,7 @@
     <section class="panel booking" id="bookingPanel" hidden>
       <div class="panel-head"><h2 id="bookingTitle">Reserve your session</h2></div>
       <p class="hint" id="bookingText"></p>
+      <div class="countdown" id="bookingCountdown" hidden></div>
       <div id="bookingCTA" hidden>
         <div class="action-row">
           <button class="btn primary" id="bookNowBtn" type="button">
@@ -58,7 +60,6 @@
         </div>
         <p class="bookmsg" id="bookMsg" hidden></p>
       </div>
-      <div class="countdown" id="bookingCountdown" hidden></div>
     </section>
 
     <section class="panel" id="statusPanel" aria-live="polite">
