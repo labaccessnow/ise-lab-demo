@@ -38,3 +38,4 @@ backend/.env
 
 # runtime maintenance/offline flag (set when a reset fails health-check)
 backend/.maintenance
+backend/credits.json

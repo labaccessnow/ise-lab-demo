@@ -115,6 +115,17 @@ nav a:hover { color: var(--fg); text-decoration: none; }
 .bookmsg.ok { color: var(--ok); }
 .bookmsg.bad { color: var(--bad); }
 
+/* buy-hours / credit balance bar */
+.billing { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 18px 0 -2px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-2); font-size: 13.5px; }
+.billing .bal { color: var(--muted); }
+.billing .bal b { color: var(--fg); font-family: ui-monospace, monospace; margin-left: 4px; }
+.buy-wrap { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.buy-label { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+.buy-label select { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 5px 9px; font: inherit; font-size: 13px; }
+.buy-note { font-size: 12.5px; }
+.buy-note.ok { color: var(--ok); }
+.buy-note.bad { color: var(--bad); }
+
 /* session-length picker (paid/admin tiers) — quick hour buttons */
 .dur { margin: 14px 0 4px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .dur-label { color: var(--fg); font-size: 13.5px; }

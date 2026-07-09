@@ -23,6 +23,14 @@
   </header>
 
   <main class="wrap">
+    <div id="billing" class="billing" hidden>
+      <span class="bal">Lab hours <b id="balHrs">0h</b></span>
+      <span class="buy-wrap">
+        <label class="buy-label">Buy <select id="buyHours"></select></label>
+        <button class="btn small" id="buyBtn" type="button">Checkout</button>
+        <span class="buy-note muted" id="buyNote"></span>
+      </span>
+    </div>
     <div id="sessionBanner" class="session-banner" hidden></div>
     <section class="hero">
       <span class="eyebrow">Live multi-vendor security lab</span>

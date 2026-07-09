@@ -150,8 +150,53 @@ async def me(request: Request):
     return {"email": email, "role": _role(groups),
             "booking_exempt": bool(EXEMPT_GROUPS & groups),
             "max_duration_min": per, "daily_quota_min": daily,
+            "credit_min": (booking or {}).get("credit_min", 0),
             "booking": booking, "book_url": BOOK_URL, "home_url": HOME_URL,
             "sign_out": SIGN_OUT_PATH}
+
+
+@app.post("/api/checkout")
+async def checkout(request: Request):
+    """Start a Stripe checkout to buy lab hours for the signed-in visitor. Identity
+    comes only from the edge-verified header; returns the hosted-checkout URL for
+    the browser to redirect to."""
+    email, _ = _identity(request)
+    if not email:
+        return JSONResponse(status_code=401, content={"detail": "Sign in to buy hours."})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        r = await _client.post("/api/checkout", headers={"X-Identity-Email": email},
+                               json={"hours": (body or {}).get("hours")})
+    except httpx.HTTPError as e:
+        return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
+    try:
+        data = r.json()
+    except Exception:
+        data = {"detail": "backend returned non-JSON"}
+    return JSONResponse(status_code=r.status_code, content=data)
+
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Public passthrough for Stripe webhooks (no SSO — Stripe can't authenticate).
+    Forward the RAW body + signature to the backend, which verifies it. This path is
+    exempted from the edge's forward-auth."""
+    body = await request.body()
+    try:
+        r = await _client.post(
+            "/api/webhook/stripe", content=body,
+            headers={"Stripe-Signature": request.headers.get("Stripe-Signature", ""),
+                     "Content-Type": request.headers.get("Content-Type", "application/json")})
+    except httpx.HTTPError as e:
+        return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
+    try:
+        data = r.json()
+    except Exception:
+        data = {"detail": "non-JSON"}
+    return JSONResponse(status_code=r.status_code, content=data)
 
 
 @app.get("/api/slots")

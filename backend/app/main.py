@@ -11,9 +11,9 @@ this service must only ever be reachable from the portal, never the internet.
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import Body, FastAPI, Header, HTTPException
+from fastapi import Body, FastAPI, Header, HTTPException, Request
 
-from . import authentik_sync, calcom, catalog, guardrails, sessions, tenancy
+from . import authentik_sync, calcom, catalog, credits, guardrails, sessions, stripe_pay, tenancy
 from .actions import ACTIONS, LabUnavailable
 from .actions import maintenance_on as actions_maintenance_on
 from .devices import DeviceError
@@ -119,7 +119,51 @@ def booking_state(x_identity_email: str = Header(None)):
     st["lab_ready"] = bool(st["occupant_is_me"] and ten["ready"])
     st["lab_preparing"] = bool(st["occupant_is_me"] and not ten["ready"] and not actions_maintenance_on())
     st["maintenance"] = actions_maintenance_on()
+    st["credit_min"] = credits.balance(me)
     return st
+
+
+@app.post("/api/checkout")
+def checkout(payload: dict | None = Body(default=None), x_identity_email: str = Header(None)):
+    """Create a Stripe (test-mode) Checkout Session to buy lab hours for the
+    verified identity; the portal redirects the buyer to the returned hosted URL."""
+    email = (x_identity_email or "").strip().lower()
+    if not email:
+        raise HTTPException(401, "sign in to buy hours")
+    if not stripe_pay.configured():
+        raise HTTPException(503, "payments are not configured")
+    try:
+        hours = int((payload or {}).get("hours") or 1)
+    except (TypeError, ValueError):
+        hours = 1
+    try:
+        s = stripe_pay.create_checkout_session(email, hours)
+    except stripe_pay.StripeError as e:
+        print(f"[stripe] checkout failed: {e}")
+        raise HTTPException(502, "couldn't start checkout — try again")
+    return {"ok": True, "url": s["url"]}
+
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Stripe posts here after a purchase. Verify the signature, then credit the
+    buyer's ledger (idempotent by session id). Fast 2xx so Stripe doesn't retry."""
+    body = await request.body()
+    evt = stripe_pay.verify_event(body, request.headers.get("Stripe-Signature", ""))
+    if not evt:
+        raise HTTPException(400, "bad signature")
+    if evt.get("type") == "checkout.session.completed":
+        obj = (evt.get("data") or {}).get("object") or {}
+        email = ((obj.get("metadata") or {}).get("email")
+                 or obj.get("client_reference_id") or obj.get("customer_email") or "")
+        try:
+            hours = int((obj.get("metadata") or {}).get("hours") or 0)
+        except (TypeError, ValueError):
+            hours = 0
+        if email and hours > 0:
+            res = credits.grant(email, hours * 60, ref=obj.get("id", ""))
+            print(f"[stripe] {email} +{hours}h granted={res['granted']} bal={res['balance']}m")
+    return {"ok": True}
 
 
 @app.get("/api/slots")

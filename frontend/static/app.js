@@ -234,6 +234,7 @@ function applyAccess() {
     who.textContent = ME.email + (ME.role === "admin" ? " · admin" : "");
     out.hidden = false;
     if (ME.sign_out) out.href = ME.sign_out;
+    renderBilling();
   }
   if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
@@ -435,10 +436,59 @@ async function doBook(startIso) {
   }
 }
 
+// --- buy hours (Stripe test checkout) + credit balance -----------------------
+let billingWired = false;
+function renderBilling() {
+  const w = $("#billing");
+  if (!w || !ME || !ME.email) return;
+  w.hidden = false;
+  $("#balHrs").textContent = Math.round((ME.credit_min || 0) / 60) + "h";
+  if (billingWired) return;
+  billingWired = true;
+  const sel = $("#buyHours");
+  for (let h = 1; h <= 8; h++) {
+    const o = document.createElement("option");
+    o.value = String(h); o.textContent = h + "h"; sel.appendChild(o);
+  }
+  $("#buyBtn").addEventListener("click", async () => {
+    const note = $("#buyNote"); $("#buyBtn").disabled = true;
+    note.className = "buy-note"; note.textContent = "opening secure checkout…";
+    try {
+      const res = await api("POST", "/api/checkout", { hours: parseInt(sel.value, 10) || 1 });
+      if (res && res.url) { location.href = res.url; return; }
+      throw new Error("no url");
+    } catch (e) {
+      $("#buyBtn").disabled = false;
+      note.className = "buy-note bad";
+      note.textContent = e.status === 401 ? "sign in first" : "couldn't start checkout";
+    }
+  });
+}
+
+async function handleCheckoutReturn() {
+  const c = new URLSearchParams(location.search).get("checkout");
+  if (!c) return;
+  history.replaceState({}, "", location.pathname);
+  const note = $("#buyNote");
+  if (!note) return;
+  if (c === "cancel") { note.className = "buy-note"; note.textContent = "checkout canceled"; return; }
+  if (c === "success") {
+    note.className = "buy-note ok"; note.textContent = "payment received — adding your hours…";
+    const start = (ME && ME.credit_min) || 0;
+    for (let i = 0; i < 8; i++) {              // credit lands via webhook (async)
+      await new Promise((r) => setTimeout(r, 1500));
+      await loadMe(); renderBilling();
+      if ((ME.credit_min || 0) > start) { note.textContent = "✓ hours added"; break; }
+    }
+  }
+}
+
 (async () => {
   await checkBookingSession();
   await loadMe();
-  if (!applyAccess()) return; // locked: the booking landing is showing
+  const open = applyAccess();
+  await handleCheckoutReturn();
+  if (!open) return; // locked: the booking landing is showing
   try { await loadStatus(); }
   catch (e) { $("#vms").innerHTML = `<div class="loading">The lab is waking up — give it a moment, then click Refresh.</div>`; }
   loadCatalog();
