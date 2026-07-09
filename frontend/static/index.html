@@ -46,11 +46,16 @@
             (<span id="bookIdentity" class="mono"></span>) — you can't reserve it as anyone else — and this
             page unlocks the moment it starts.</p>
         </div>
-        <div class="action-row later">
-          <label class="later-label">Or pick a later time
-            <input type="datetime-local" id="bookWhen" />
+        <div class="dur" id="durWrap" hidden>
+          <label class="dur-label">Session length
+            <select id="durSel"></select>
           </label>
-          <button class="btn" id="bookLaterBtn" type="button">Reserve</button>
+          <span class="dur-note muted" id="durNote"></span>
+        </div>
+        <div class="cal" id="calWrap">
+          <div class="cal-head">Or reserve a later time — <span class="muted">pick a day, then an open slot (booked times are greyed)</span></div>
+          <div class="cal-days" id="calDays"></div>
+          <div class="cal-slots" id="calSlots"><div class="loading">Loading times…</div></div>
         </div>
         <p class="bookmsg" id="bookMsg" hidden></p>
       </div>

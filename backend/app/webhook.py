@@ -102,6 +102,16 @@ async def cal_booking(request: Request):
     if trigger not in ("BOOKING_CREATED", "BOOKING_RESCHEDULED"):
         return {"ok": True, "ignored": trigger}
 
+    # Portal (BFF) bookings mint their own tier-length occupancy synchronously, so
+    # don't double-mint here (identified by our metadata tag, with the uid as a
+    # belt-and-suspenders). Cancels/reschedules still fall through to keep them in
+    # sync. Everything else here is a raw Cal.com-page booking (base 1h slot).
+    if trigger == "BOOKING_CREATED" and (
+            (p.get("metadata") or {}).get("bookedVia") == "portal-bff"
+            or sessions.has_uid(uid)):
+        _nudge_sync()
+        return {"ok": True, "via": "bff"}
+
     email = ((p.get("attendees") or [{}])[0] or {}).get("email", "")
     now = time.time()
     starts_at = _ts(p.get("startTime") or p.get("start") or "", now)

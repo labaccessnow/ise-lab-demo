@@ -11,17 +11,20 @@ public forward-auth gate (that gate is for browsers; this is trusted server-side
 The REST API app (/api/v1) isn't deployed on this instance, so /api/book/event —
 the same endpoint the Cal.com booking page uses — is the integration point.
 """
+import datetime
 import json
 import os
 import time
 import urllib.error
 import urllib.request
+from zoneinfo import ZoneInfo
 
 CALCOM_URL = os.environ.get("CALCOM_INTERNAL_URL", "http://cal.internal:3000").rstrip("/")
 EVENT_ID = int(os.environ.get("CALCOM_LAB_EVENT_ID", "2"))
 EVENT_SLUG = os.environ.get("CALCOM_LAB_EVENT_SLUG", "self-service-lab")
 EVENT_USER = os.environ.get("CALCOM_LAB_EVENT_USER", "labaccessnow")
 EVENT_TZ = os.environ.get("CALCOM_LAB_TZ", "America/New_York")
+EVENT_LEN_MIN = int(os.environ.get("CALCOM_LAB_LEN_MIN", "60"))
 
 
 class BookingError(RuntimeError):
@@ -35,6 +38,50 @@ def next_slot_iso(within: int = 300) -> str:
     'start now' time. 5-min granularity keeps the start just ahead of 'now'."""
     s = ((int(time.time()) // within) + 1) * within
     return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(s))
+
+
+def _iso(epoch: float) -> str:
+    return datetime.datetime.utcfromtimestamp(epoch).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def parse_iso(s: str) -> float:
+    return datetime.datetime.fromisoformat((s or "").replace("Z", "+00:00")).timestamp()
+
+
+def day_bounds(epoch: float) -> tuple[float, float]:
+    """Start/end epoch of the local (event-TZ) calendar day containing `epoch` —
+    the window a per-day quota is measured over."""
+    tz = ZoneInfo(EVENT_TZ)
+    local = datetime.datetime.fromtimestamp(epoch, tz)
+    d0 = local.replace(hour=0, minute=0, second=0, microsecond=0)
+    d1 = d0 + datetime.timedelta(days=1)
+    return d0.timestamp(), d1.timestamp()
+
+
+def day_slots(date_str: str, busy: list) -> dict:
+    """Bookable slots for one day, in the event's timezone, for the in-portal
+    calendar. One row per hour; each is Open unless it's in the past or overlaps a
+    live booking (busy = list of (start,end) epochs), so the visitor can see at a
+    glance what's free. The lab is single-tenant, so a taken hour is simply gone."""
+    tz = ZoneInfo(EVENT_TZ)
+    now = time.time()
+    try:
+        y, m, d = (int(x) for x in date_str.split("-"))
+        day = datetime.date(y, m, d)
+    except Exception:
+        day = datetime.datetime.now(tz).date()
+    slots = []
+    for hour in range(24):
+        local = datetime.datetime(day.year, day.month, day.day, hour, 0, tzinfo=tz)
+        start = local.astimezone(datetime.timezone.utc).timestamp()
+        end = start + EVENT_LEN_MIN * 60
+        if start <= now:
+            continue  # don't offer past hours
+        taken = any(start < b_end and end > b_start for b_start, b_end in busy)
+        slots.append({"start": _iso(start),
+                      "label": local.strftime("%-I:%M %p"),
+                      "taken": taken})
+    return {"date": day.isoformat(), "tz": EVENT_TZ, "slots": slots}
 
 
 def book(email: str, name: str, start_iso: str) -> dict:

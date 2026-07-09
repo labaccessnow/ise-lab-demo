@@ -304,6 +304,7 @@ function applyAccess() {
     paint();
     tickTimer = setInterval(paint, 1000);
     wireBooking();
+    renderDuration();
   } else {
     $("#bookingTitle").textContent = "Reserve your session";
     text.textContent = "The whole lab is yours for a private window — one visitor at a time, reset to a clean baseline at the start. Booking is free; this page unlocks at your slot.";
@@ -312,20 +313,85 @@ function applyAccess() {
     cd.hidden = true;
     $("#bookIdentity").textContent = (ME && ME.email) || "";
     wireBooking();
+    renderDuration();
   }
   return false;
 }
 
 let bookingWired = false;
+let calDate = null;
+let selDuration = 60;
 function wireBooking() {
   if (bookingWired) return;
   bookingWired = true;
   $("#bookNowBtn").addEventListener("click", () => doBook(null));
-  $("#bookLaterBtn").addEventListener("click", () => {
-    const v = $("#bookWhen").value;
-    if (!v) { showBookMsg("Pick a date and time first.", "bad"); return; }
-    doBook(new Date(v).toISOString());
-  });
+  renderCalDays();
+}
+
+// Session-length selector — shown only for tiers that get more than 1 hour
+// (paid / admin, per /api/me). Free demo stays a fixed 1-hour session.
+function renderDuration() {
+  const wrap = $("#durWrap"), sel = $("#durSel"), note = $("#durNote");
+  if (!wrap) return;
+  const max = (ME && ME.max_duration_min) || 60;
+  if (max <= 60) { wrap.hidden = true; selDuration = 60; return; }
+  wrap.hidden = false;
+  if (!sel.options.length) {
+    for (let m = 60; m <= max; m += 60) {
+      const o = document.createElement("option");
+      o.value = String(m);
+      o.textContent = (m / 60) + (m === 60 ? " hour" : " hours");
+      sel.appendChild(o);
+    }
+    selDuration = 60;
+    sel.addEventListener("change", () => { selDuration = parseInt(sel.value, 10) || 60; });
+  }
+  const daily = (ME && ME.daily_quota_min) || max;
+  note.textContent = daily > 60 ? `up to ${daily / 60}h per day` : "";
+}
+
+function renderCalDays() {
+  const wrap = $("#calDays");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cal-day" + (i === 0 ? " sel" : "");
+    btn.innerHTML = `<span class="dow">${i === 0 ? "Today" : d.toLocaleDateString([], { weekday: "short" })}</span><span class="dnum">${d.getDate()}</span>`;
+    btn.addEventListener("click", () => {
+      wrap.querySelectorAll(".cal-day").forEach((b) => b.classList.remove("sel"));
+      btn.classList.add("sel");
+      loadSlots(iso);
+    });
+    wrap.appendChild(btn);
+  }
+  loadSlots(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`);
+}
+
+async function loadSlots(dateIso) {
+  calDate = dateIso;
+  const el = $("#calSlots");
+  if (!el) return;
+  el.innerHTML = `<div class="loading">Loading times…</div>`;
+  let data;
+  try { data = await api("GET", `/api/slots?date=${encodeURIComponent(dateIso)}`); }
+  catch (_) { el.innerHTML = `<div class="loading">Couldn't load times — try again.</div>`; return; }
+  const slots = (data && data.slots) || [];
+  if (!slots.length) { el.innerHTML = `<div class="loading">No open times left this day — try another.</div>`; return; }
+  el.innerHTML = "";
+  for (const s of slots) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "slot" + (s.taken ? " taken" : "");
+    b.textContent = s.taken ? `${s.label} · booked` : s.label;
+    if (s.taken) b.disabled = true;
+    else b.addEventListener("click", () => doBook(s.start));
+    el.appendChild(b);
+  }
 }
 
 function showBookMsg(text, cls) {
@@ -336,16 +402,17 @@ function showBookMsg(text, cls) {
 }
 
 async function doBook(startIso) {
-  const btns = [$("#bookNowBtn"), $("#bookLaterBtn")];
+  const btns = [$("#bookNowBtn")].filter(Boolean);
   btns.forEach((b) => (b.disabled = true));
   showBookMsg(startIso ? "Reserving your slot…" : "Starting your session…", "");
   try {
-    const res = await api("POST", "/api/book", startIso ? { start: startIso } : {});
+    const res = await api("POST", "/api/book", { start: startIso || undefined, duration_min: selDuration });
     const when = res.start ? fmtTime(new Date(res.start).getTime() / 1000) : "your slot";
-    showBookMsg(`✓ Reserved for ${when}. Unlocking…`, "ok");
-    log(`lab reserved for ${when}`, "ok");
-    // The Cal.com webhook mints the session a moment later; poll /api/me until it
-    // shows, then re-render (active → unlocked, future → countdown).
+    const hrs = res.duration_min ? res.duration_min / 60 : 1;
+    showBookMsg(`✓ Reserved for ${when} · ${hrs}h. Unlocking…`, "ok");
+    log(`lab reserved for ${when} (${hrs}h)`, "ok");
+    // Booking mints the session; poll /api/me until it shows, then re-render
+    // (active → unlocked, future → countdown).
     for (let i = 0; i < 8; i++) {
       await new Promise((r) => setTimeout(r, 1500));
       await loadMe();
@@ -354,7 +421,7 @@ async function doBook(startIso) {
     if (applyAccess()) { await loadStatus().catch(() => {}); loadCatalog(); }
   } catch (e) {
     btns.forEach((b) => (b.disabled = false));
-    if (e.status === 409) showBookMsg("That time was just taken — pick another.", "bad");
+    if (e.status === 409) { showBookMsg(e.message || "That time was just taken — pick another.", "bad"); if (calDate) loadSlots(calDate); }
     else if (e.status === 401) showBookMsg("Please sign in again to book.", "bad");
     else showBookMsg("Couldn't book right now — try again in a moment.", "bad");
   }

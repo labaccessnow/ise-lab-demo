@@ -36,6 +36,23 @@ STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 ADMIN_GROUP = os.environ.get("ADMIN_GROUP", "lab-admins")
 EXEMPT_GROUPS = {g.strip() for g in os.environ.get(
     "BOOKING_EXEMPT_GROUPS", "lab-admins,lab-approved").split(",") if g.strip()}
+
+# Reservation tiers by Authentik group. Privileged (paid or admin) get an 8h
+# session and 8h/day; everyone else (free demo) gets 1h. Add a group here to grant
+# the longer tier — e.g. the future paid group is already listed.
+PRIVILEGED_GROUPS = {g.strip() for g in os.environ.get(
+    "BOOKING_PRIVILEGED_GROUPS", "lab-admins,lab-paid").split(",") if g.strip()}
+PRIV_SESSION_MIN = int(os.environ.get("BOOKING_PRIV_SESSION_MIN", "480"))
+PRIV_DAILY_MIN = int(os.environ.get("BOOKING_PRIV_DAILY_MIN", "480"))
+FREE_SESSION_MIN = int(os.environ.get("BOOKING_FREE_SESSION_MIN", "60"))
+FREE_DAILY_MIN = int(os.environ.get("BOOKING_FREE_DAILY_MIN", "60"))
+
+
+def _limits(groups: set[str]) -> tuple[int, int]:
+    """(per-session max, per-day quota) in minutes for these groups."""
+    if PRIVILEGED_GROUPS & groups:
+        return PRIV_SESSION_MIN, PRIV_DAILY_MIN
+    return FREE_SESSION_MIN, FREE_DAILY_MIN
 BOOK_URL = os.environ.get(
     "BOOK_URL", "https://book.labaccessnow.com/labaccessnow/self-service-lab")
 # The embedded-outpost sign-out path; the edge proxies /outpost.goauthentik.io/.
@@ -113,9 +130,22 @@ async def me(request: Request):
                 booking = r.json()
         except httpx.HTTPError:
             pass
+    per, daily = _limits(groups)
     return {"email": email, "role": _role(groups),
             "booking_exempt": bool(EXEMPT_GROUPS & groups),
+            "max_duration_min": per, "daily_quota_min": daily,
             "booking": booking, "book_url": BOOK_URL, "sign_out": SIGN_OUT_PATH}
+
+
+@app.get("/api/slots")
+async def slots(request: Request):
+    """Open/taken slots for the in-portal booking calendar (availability only, no
+    identity needed). Proxies the backend, which derives it from live sessions."""
+    try:
+        r = await _client.get("/api/slots", params={"date": request.query_params.get("date", "")})
+        return JSONResponse(status_code=r.status_code, content=r.json())
+    except httpx.HTTPError as e:
+        return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})
 
 
 @app.post("/api/book")
@@ -131,11 +161,14 @@ async def book(request: Request):
         body = await request.json()
     except Exception:
         body = {}
+    per, daily = _limits(groups)
     try:
         r = await _client.post(
             "/api/book",
-            headers={"X-Identity-Email": email},
-            json={"start": (body or {}).get("start"), "name": (body or {}).get("name")},
+            headers={"X-Identity-Email": email,
+                     "X-Booking-Max-Min": str(per), "X-Booking-Daily-Min": str(daily)},
+            json={"start": (body or {}).get("start"), "name": (body or {}).get("name"),
+                  "duration_min": (body or {}).get("duration_min")},
         )
     except httpx.HTTPError as e:
         return JSONResponse(status_code=502, content={"detail": f"backend unreachable: {e.__class__.__name__}"})

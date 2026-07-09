@@ -115,6 +115,29 @@ nav a:hover { color: var(--fg); text-decoration: none; }
 .bookmsg.ok { color: var(--ok); }
 .bookmsg.bad { color: var(--bad); }
 
+/* session-length selector (paid/admin tiers) */
+.dur { margin: 14px 0 4px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dur-label { color: var(--fg); font-size: 13.5px; display: inline-flex; align-items: center; gap: 8px; }
+.dur select { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 7px 10px; font: inherit; font-size: 13px; }
+.dur-note { font-size: 12.5px; }
+
+/* booking calendar */
+.cal { margin-top: 16px; }
+.cal-head { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.cal-days { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.cal-day { background: #090c12; border: 1px solid var(--line); border-radius: 10px; color: var(--fg); padding: 8px 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; min-width: 52px; font: inherit; }
+.cal-day .dow { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cal-day .dnum { font-size: 16px; font-weight: 600; }
+.cal-day:hover { border-color: var(--accent); }
+.cal-day.sel { border-color: var(--accent); background: rgba(90,169,255,.12); }
+.cal-day.sel .dow { color: var(--accent); }
+.cal-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.slot { background: #090c12; border: 1px solid var(--line); border-radius: 8px; color: var(--fg); padding: 9px 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.slot:hover { border-color: var(--ok); color: var(--ok); }
+.slot.taken { color: var(--muted); cursor: not-allowed; opacity: .5; text-decoration: line-through; }
+.slot.taken:hover { border-color: var(--line); color: var(--muted); }
+.cal-slots .loading { grid-column: 1 / -1; color: var(--muted); font-size: 13px; padding: 4px 0; }
+
 /* booking handoff banner */
 .session-banner { border-radius: 10px; padding: 12px 16px; margin: 18px 0 -2px; font-size: 14px; border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); }
 .session-banner.ok { border-color: var(--ok); color: var(--ok); background: rgba(58,210,159,.08); }

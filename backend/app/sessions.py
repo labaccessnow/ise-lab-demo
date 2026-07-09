@@ -200,6 +200,40 @@ def active_emails() -> set[str]:
     return {occ["email"]} if occ else set()
 
 
+def booked_minutes_on(email: str, day0: float, day1: float) -> float:
+    """Total minutes this identity already has booked for the day [day0, day1)
+    (epoch bounds) — used to enforce a per-day quota (e.g. 8h/day). Counts live
+    (future + active) sessions; fully-expired ones are pruned, so this is 'what's
+    on the books now', which is what a quota needs to stop overbooking."""
+    who = _norm(email)
+    with _lock:
+        live = _prune(_load())
+    total = 0.0
+    for s in live.values():
+        if who and who in {_norm(s.get("email")), _norm(s.get("claimed_by"))}:
+            st = _start_of(s)
+            if day0 <= st < day1:
+                total += max(0.0, float(s.get("expires_at", st)) - st) / 60.0
+    return total
+
+
+def has_uid(uid: str | None) -> bool:
+    if not uid:
+        return False
+    with _lock:
+        d = _load()
+    return any(v.get("uid") == uid for v in d.values())
+
+
+def busy_ranges() -> list[tuple[float, float]]:
+    """(start, end) for every live (unexpired) session — so the booking calendar
+    can mark a slot Taken when it overlaps one. Every Cal.com booking mints a
+    session via the webhook, so this reflects all reservations, not just BFF ones."""
+    with _lock:
+        live = _prune(_load())
+    return [(_start_of(s), float(s.get("expires_at", 0))) for s in live.values()]
+
+
 def drop_uid(uid: str | None) -> int:
     """Remove the session(s) minted for a cancelled booking uid. Returns count."""
     if not uid:

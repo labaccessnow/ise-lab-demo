@@ -106,31 +106,76 @@ def booking_state(x_identity_email: str = Header(None)):
     return st
 
 
+@app.get("/api/slots")
+def slots(date: str = ""):
+    """Open/taken slots for a day (event TZ), for the in-portal booking calendar.
+    Availability is derived from live sessions (every booking mints one), so the
+    visitor sees exactly what's free. Booking still goes through /api/book, which
+    is the authority on conflicts."""
+    return calcom.day_slots(date, sessions.busy_ranges())
+
+
+_ALLOWED_DUR = [60, 120, 180, 240, 300, 360, 420, 480]
+
+
 @app.post("/api/book")
 def book_slot(payload: dict | None = Body(default=None),
-              x_identity_email: str = Header(None)):
+              x_identity_email: str = Header(None),
+              x_booking_max_min: str = Header("60"),
+              x_booking_daily_min: str = Header("60")):
     """Book the lab for the EDGE-VERIFIED identity. The attendee email is taken
-    only from X-Identity-Email (set by the trusted portal from the Authentik
-    subrequest) — the client may pass a display name and a start time, never the
-    email. This is what makes the reservation identity-bound: you cannot book the
-    lab as anyone but yourself. Cal.com then fires its webhook, which mints the
-    slot-bound session exactly as for any booking."""
+    ONLY from X-Identity-Email (set by the trusted portal from the Authentik
+    subrequest) — the client may pass a display name, start time and requested
+    duration, never the email. So a reservation is always identity-bound.
+
+    Duration is tiered: the portal passes the caller's per-session cap
+    (X-Booking-Max-Min) and per-day quota (X-Booking-Daily-Min) from their group
+    (free 1h, paid/admin 8h + 8h/day). We hold the base slot in Cal.com and mint
+    OUR single-tenant occupancy for the granted length — the backend owns how long
+    the lab is actually held, so the tier applies even though Cal.com's slot is 1h."""
     email = (x_identity_email or "").strip().lower()
     if not email:
         raise HTTPException(401, "sign in to book")
-    # Defense in depth: the edge already authenticated, but confirm the account is
-    # active (email-verified) before consuming a slot / mailing a link.
     if authentik_sync.is_active_account(email) is False:
         raise HTTPException(403, "account is not an active lab member")
+
+    def _int(v, d):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return d
+    per_cap = _int(x_booking_max_min, 60)
+    daily_cap = _int(x_booking_daily_min, 60)
+    requested = _int((payload or {}).get("duration_min"), 60)
+
     start = (payload or {}).get("start") or calcom.next_slot_iso()
+    start_epoch = calcom.parse_iso(start)
+    d0, d1 = calcom.day_bounds(start_epoch)
+    used = sessions.booked_minutes_on(email, d0, d1)
+    remaining = daily_cap - used
+    if remaining < 60:
+        raise HTTPException(409, "You've used your lab time for that day — try another day.")
+
+    dur = min(requested, per_cap, int(remaining), _ALLOWED_DUR[-1])
+    dur = max(a for a in _ALLOWED_DUR if a <= dur)  # snap down to an allowed step
+
     name = (payload or {}).get("name") or ""
     try:
-        res = calcom.book(email, name, start)
+        res = calcom.book(email, name, start)  # holds the base slot + emails the booker
     except calcom.BookingError as e:
         if e.conflict:
             raise HTTPException(409, "That time isn't available — pick another slot.")
         raise HTTPException(502, "Booking service is unavailable right now.")
-    return {"ok": True, **res}
+
+    start_epoch = calcom.parse_iso(res.get("start") or start)
+    end_epoch = start_epoch + dur * 60
+    sessions.mint("ise-lab-demo", email, end_epoch, starts_at=start_epoch, uid=res.get("uid", ""))
+    try:  # promptly reflect the new occupant in the desktop group
+        authentik_sync.reconcile(sessions.active_emails())
+    except Exception:
+        pass
+    return {"ok": True, "start": res.get("start") or start,
+            "end": calcom._iso(end_epoch), "duration_min": dur}
 
 
 @app.get("/api/actions")
