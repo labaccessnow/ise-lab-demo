@@ -17,7 +17,7 @@ echo "DB_PASSWORD=$(openssl rand -hex 16)" > .env
 docker run --rm guacamole/guacamole /opt/guacamole/bin/initdb.sh --postgresql > initdb/001-schema.sql
 sudo docker compose up -d
 ```
-Then seed the `ISE Lab Desktop` RDP connection (host `0.0.0.0`, user `james`,
+Then seed the `Enterprise Lab Desktop` RDP connection (host `0.0.0.0`, user `james`,
 password from SOPS `jumpbox`) and a limited `demo` user granted only that
 connection — see the project docs.
 

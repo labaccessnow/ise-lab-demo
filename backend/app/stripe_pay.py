@@ -65,7 +65,7 @@ def create_checkout_session(email: str, hours: int) -> dict:
         ("line_items[0][quantity]", str(hours)),
         ("line_items[0][price_data][currency]", "usd"),
         ("line_items[0][price_data][unit_amount]", str(CREDIT_PRICE_PER_HOUR_CENTS)),
-        ("line_items[0][price_data][product_data][name]", "ISE Lab — 1 lab hour"),
+        ("line_items[0][price_data][product_data][name]", "Enterprise Lab — 1 lab hour"),
         ("metadata[email]", email),
         ("metadata[hours]", str(hours)),
     ]

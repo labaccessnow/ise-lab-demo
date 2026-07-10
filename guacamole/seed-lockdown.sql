@@ -1,4 +1,4 @@
--- Guacamole desktop lockdown for the "ISE Lab Desktop" RDP connection.
+-- Guacamole desktop lockdown for the "Enterprise Lab Desktop" RDP connection.
 --
 -- The visitor desktop is meant to be pixels-only: you can see and click the real
 -- device GUIs, but you cannot move data in or out of the enclave jumpbox. This
@@ -23,6 +23,6 @@ CROSS JOIN (VALUES
     ('enable-audio-input', 'false'),  -- no microphone
     ('enable-printing',    'false')   -- no printer redirection
 ) AS p(name, value)
-WHERE c.connection_name = 'ISE Lab Desktop'
+WHERE c.connection_name = 'Enterprise Lab Desktop'
 ON CONFLICT (connection_id, parameter_name)
 DO UPDATE SET parameter_value = EXCLUDED.parameter_value;
