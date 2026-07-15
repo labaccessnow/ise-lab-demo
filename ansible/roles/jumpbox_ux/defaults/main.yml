@@ -1,0 +1,43 @@
+---
+# ============================================================================
+# jumpbox_ux — visitor-facing desktop for the enclave jumpbox (XFCE + xrdp,
+# streamed pixels-only through Guacamole). Turns a bare desktop into a guided
+# "Start the Lab" landing: one desktop icon, Firefox auto-opens a branded start
+# page with a card per device. Applied system-wide (all users).
+#
+# Public-repo policy: every IP here is 0.0.0.0. Supply the real enclave IPs at
+# deploy time via host_vars/jumpbox.yml or the environment — NOT in git.
+# ============================================================================
+
+# Local account the streamed desktop runs as (owns ~/lab, ~/Desktop).
+jumpbox_user: "labuser"
+jumpbox_home: "/home/{{ jumpbox_user }}"
+
+# Branding shown on the start page.
+jumpbox_brand_wordmark: "enterprise·lab"
+jumpbox_brand_title: "The Enterprise Lab"
+
+# Device cards, in display order. `url` is what the card opens; keep 0.0.0.0 in
+# git and override per-device in host_vars/jumpbox.yml with the real enclave
+# address (https, self-signed — visitors accept the browser warning).
+jumpbox_devices:
+  - name: "Cisco ISE"
+    desc: "Policy & identity — admin GUI"
+    url: "https://0.0.0.0"
+  - name: "Cisco 9800 WLC"
+    desc: "Wireless LAN controller"
+    url: "https://0.0.0.0"
+  - name: "Palo Alto NGFW"
+    desc: "PAN-OS management"
+    url: "https://0.0.0.0"
+  - name: "Arista vEOS"
+    desc: "Data-center switch"
+    url: "https://0.0.0.0"
+
+# In-enclave NTP source the jumpbox syncs to (the demo DC). Keeps the jumpbox
+# clock consistent with the rest of the enclave golden, NOT real-world time.
+jumpbox_ntp_source: "0.0.0.0"
+
+# Optional management SSH public key to install for jumpbox_user. Leave empty to
+# skip. NEVER commit a real key — pass it via host_vars/vault at deploy time.
+jumpbox_authorized_key: ""

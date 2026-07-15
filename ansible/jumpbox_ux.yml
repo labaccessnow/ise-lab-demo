@@ -1,0 +1,14 @@
+---
+# Configure the streamed jumpbox desktop into a guided lab landing.
+# The jumpbox IS SSH-reachable (unlike the enclave devices), so this runs
+# against the host directly — not delegated to the PVE API.
+#
+#   ansible-playbook -i inventory.yml jumpbox_ux.yml -l jumpbox
+#
+# After a successful run, re-cut the jumpbox golden so the state survives
+# resets (the golden is a vmstate snapshot — see roles/jumpbox_ux/README.md).
+- name: Configure the enclave jumpbox visitor desktop
+  hosts: jumpbox
+  gather_facts: false
+  roles:
+    - jumpbox_ux

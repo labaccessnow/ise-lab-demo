@@ -1,0 +1,119 @@
+---
+# jumpbox_ux — configure the streamed jumpbox desktop into a guided lab landing.
+# Idempotent; safe to re-run. Run against the jumpbox host (SSH), e.g.:
+#   ansible-playbook -i inventory.yml jumpbox_ux.yml -l jumpbox
+# After a successful run, RE-CUT the jumpbox golden snapshot so the state
+# survives resets (the golden is a vmstate snapshot — see README).
+
+- name: Ensure lab + Desktop + autostart dirs exist
+  become: true
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(jumpbox_user) }}"
+    group: "{{ item.owner | default(jumpbox_user) }}"
+    mode: "0755"
+  loop:
+    - { path: "{{ jumpbox_home }}/lab" }
+    - { path: "{{ jumpbox_home }}/Desktop" }
+    - { path: "/etc/firefox/policies", owner: "root" }
+    - { path: "/usr/lib/firefox/distribution", owner: "root" }
+    - { path: "/etc/xdg/autostart", owner: "root" }
+
+# --- Firefox: kill onboarding/telemetry, pin the start page as homepage -------
+# Ship to both locations so it applies to the deb path and the snap path.
+- name: Deploy Firefox enterprise policies (all users)
+  become: true
+  ansible.builtin.template:
+    src: firefox-policies.json.j2
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/firefox/policies/policies.json
+    - /usr/lib/firefox/distribution/policies.json
+
+# --- Branded start page + single desktop launcher -----------------------------
+- name: Deploy the branded lab start page
+  become: true
+  ansible.builtin.template:
+    src: lab-start.html.j2
+    dest: "{{ jumpbox_home }}/lab/index.html"
+    owner: "{{ jumpbox_user }}"
+    group: "{{ jumpbox_user }}"
+    mode: "0644"
+
+- name: Deploy the single "Start the Lab" desktop launcher
+  become: true
+  ansible.builtin.template:
+    src: start-the-lab.desktop.j2
+    dest: "{{ jumpbox_home }}/Desktop/start-the-lab.desktop"
+    owner: "{{ jumpbox_user }}"
+    group: "{{ jumpbox_user }}"
+    mode: "0755"
+
+- name: Mark the launcher trusted (XFCE won't nag on first click)
+  become: true
+  become_user: "{{ jumpbox_user }}"
+  ansible.builtin.command: gio set "{{ jumpbox_home }}/Desktop/start-the-lab.desktop" metadata::trusted true
+  changed_when: false
+  failed_when: false
+
+- name: Auto-open the start page on every login (all users)
+  become: true
+  ansible.builtin.copy:
+    src: lab-start-autostart.desktop
+    dest: /etc/xdg/autostart/lab-start.desktop
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- Hide the default desktop clutter icons (only "Start the Lab" remains) -----
+# Best-effort: needs the user's live D-Bus session; harmless if it can't reach it.
+- name: Hide default desktop icons (filesystem/home/trash/removable)
+  become: true
+  become_user: "{{ jumpbox_user }}"
+  ansible.builtin.command: >-
+    xfconf-query -c xfce4-desktop
+    -p /desktop-icons/file-icons/{{ item }} -n -t bool -s false
+  environment:
+    DISPLAY: ":10"
+  loop: [show-filesystem, show-home, show-trash, show-removable]
+  changed_when: false
+  failed_when: false
+
+# --- Clock: sync the jumpbox to the enclave DC (NOT real-world time) -----------
+- name: Point chrony at the enclave DC so the clock re-syncs after a reset
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/chrony/sources.d/lab-dc.sources
+    content: |
+      server {{ jumpbox_ntp_source }} iburst
+      makestep 1.0 -1
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart chrony
+
+# --- Optional management SSH key (builtin, no extra collection) --------------
+- name: Ensure .ssh dir for {{ jumpbox_user }}
+  become: true
+  ansible.builtin.file:
+    path: "{{ jumpbox_home }}/.ssh"
+    state: directory
+    owner: "{{ jumpbox_user }}"
+    group: "{{ jumpbox_user }}"
+    mode: "0700"
+  when: jumpbox_authorized_key | length > 0
+
+- name: Install management SSH public key for {{ jumpbox_user }}
+  become: true
+  ansible.builtin.lineinfile:
+    path: "{{ jumpbox_home }}/.ssh/authorized_keys"
+    line: "{{ jumpbox_authorized_key }}"
+    create: true
+    owner: "{{ jumpbox_user }}"
+    group: "{{ jumpbox_user }}"
+    mode: "0600"
+  when: jumpbox_authorized_key | length > 0

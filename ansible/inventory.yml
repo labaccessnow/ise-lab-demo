@@ -12,3 +12,6 @@ all:
     cisco_ise:           # ISE API target for the cert-lifecycle role (control-node-local vs the ERS/OpenAPI)
       hosts:
         ise1: {}         # same node, second hat: API automation + cert lifecycle (see group_vars/cisco_ise.yml)
+    jumpbox:             # streamed visitor desktop (SSH-reachable, unlike the enclave) — jumpbox_ux role
+      hosts:
+        jumpbox: {}      # XFCE + xrdp via Guacamole  (0.0.0.0)  -- see host_vars/jumpbox.yml

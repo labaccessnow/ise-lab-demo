@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ jumpbox_brand_title }}</title>
+<style>
+ body{margin:0;font-family:system-ui,sans-serif;background:#0b1020;color:#e8ecf7;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+ h1{font-weight:700;letter-spacing:.02em;margin:0 0 6px} h1 span{color:#6ea8ff}
+ p{color:#9aa7c7;margin:0 0 34px;max-width:640px;text-align:center;line-height:1.5}
+ .grid{display:grid;grid-template-columns:repeat(2,280px);gap:18px}
+ a.card{display:block;background:#141b33;border:1px solid #26325c;border-radius:12px;padding:18px 20px;text-decoration:none;color:#e8ecf7;transition:.15s}
+ a.card:hover{border-color:#6ea8ff;transform:translateY(-2px)}
+ .t{font-weight:600;font-size:17px}.d{color:#8fa0c9;font-size:13px;margin-top:4px}
+ .foot{color:#5d6a8f;font-size:12px;margin-top:36px}
+</style>
+</head>
+<body>
+<h1>{{ jumpbox_brand_wordmark | replace('·', '<span>&middot;</span>') | safe }}</h1>
+<p>Everything below is live and yours for this session. Break things freely &mdash; the one-click reset in the portal rolls the whole lab back to a clean baseline.</p>
+<div class="grid">
+{% for d in jumpbox_devices %}
+ <a class="card" href="{{ d.url }}"><div class="t">{{ d.name }}</div><div class="d">{{ d.desc }}</div></a>
+{% endfor %}
+</div>
+<div class="foot">Certificates are self-signed inside the lab &mdash; accept the browser warning.</div>
+</body>
+</html>

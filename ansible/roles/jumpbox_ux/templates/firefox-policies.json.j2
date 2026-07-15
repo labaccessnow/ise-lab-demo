@@ -1,0 +1,27 @@
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DontCheckDefaultBrowser": true,
+    "NoDefaultBookmarks": true,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "SkipTermsOfUse": true,
+    "DisableAppUpdate": true,
+    "DisableFirefoxAccounts": true,
+    "DisablePocket": true,
+    "Homepage": {
+      "URL": "file://{{ jumpbox_home }}/lab/index.html",
+      "StartPage": "homepage",
+      "Locked": false
+    },
+    "FirefoxHome": {
+      "Search": false, "TopSites": false, "SponsoredTopSites": false,
+      "Highlights": false, "Pocket": false, "SponsoredPocket": false, "Snippets": false
+    },
+    "UserMessaging": {
+      "ExtensionRecommendations": false, "FeatureRecommendations": false,
+      "UrlbarInterventions": false, "SkipOnboarding": true, "MoreFromMozilla": false
+    }
+  }
+}
