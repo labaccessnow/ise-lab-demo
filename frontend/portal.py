@@ -99,7 +99,14 @@ def _identity(request: Request) -> tuple[str, set[str]]:
 
 
 def _role(groups: set[str]) -> str:
-    return "admin" if ADMIN_GROUP in groups else "visitor"
+    # Three tiers. Free visitors get the read-only catalog; paid tenants get the
+    # full device catalog (writes included) for their longer slot; admin is James.
+    # PRIVILEGED_GROUPS also carries the booking caps, so the tiers stay in step.
+    if ADMIN_GROUP in groups:
+        return "admin"
+    if PRIVILEGED_GROUPS & groups:
+        return "paid"
+    return "visitor"
 
 
 def _client_ip(request: Request) -> str:

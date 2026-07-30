@@ -64,7 +64,7 @@ def px() -> Proxmox:
     return _px
 
 
-_ROLES = {"visitor": 0, "admin": 1}
+_ROLES = {"visitor": 0, "paid": 1, "admin": 2}
 
 
 def _authorized(have: str, need: str) -> bool:
@@ -266,7 +266,7 @@ def run_action(action_id: str,
     # While the lab is offline (a reset failed health-check), don't let a visitor
     # drive any action against the half-broken lab — except lab.status, which feeds
     # the maintenance banner. Admin recovery actions (clear_maintenance) stay open.
-    if act.role == "visitor" and action_id != "lab.status" and actions_maintenance_on():
+    if act.role != "admin" and action_id != "lab.status" and actions_maintenance_on():
         raise HTTPException(503, "Lab is temporarily offline for maintenance. Please try again later.")
     # The enclave is ONE shared set of VMs — strictly single-tenant. Any MUTATING
     # lab action (reset, API writes) requires you to be the CURRENT OCCUPANT: the

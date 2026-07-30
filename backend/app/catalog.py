@@ -72,7 +72,7 @@ CATALOG = {
         "params": [], "call": _read("GET", "/ers/config/identitygroup?size=100"),
     },
     "ise.create_endpoint": {
-        "label": "Register a test endpoint", "role": "visitor", "mutating": True,
+        "label": "Register a test endpoint", "role": "paid", "mutating": True,
         "summary": "Create an endpoint by MAC — a lab reset wipes it",
         "params": [{"name": "mac", "label": "MAC address", "required": True,
                     "example": "AA:BB:CC:00:11:22"}],
@@ -81,7 +81,7 @@ CATALOG = {
 
     # --- More ISE OpenAPI reads (work once OpenAPI is on — already enabled) ---
     "ise.policy_sets": {
-        "label": "Network-access policy sets", "role": "admin", "mutating": False,
+        "label": "Network-access policy sets", "role": "paid", "mutating": False,
         "summary": "List network-access policy sets (OpenAPI)",
         "params": [], "call": _read("GET", "/api/v1/policy/network-access/policy-set"),
     },
@@ -91,7 +91,7 @@ CATALOG = {
         "params": [], "call": _read("GET", "/api/v1/policy/network-access/authorization-profiles"),
     },
     "ise.trusted_certs": {
-        "label": "Trusted certificates", "role": "admin", "mutating": False,
+        "label": "Trusted certificates", "role": "paid", "mutating": False,
         "summary": "List the ISE trusted-certificate store (OpenAPI)",
         "params": [], "call": _read("GET", "/api/v1/certs/trusted-certificate"),
     },
@@ -103,14 +103,14 @@ CATALOG = {
         "params": [], "call": _read("GET", "/ers/config/profilerprofile?size=20"),
     },
     "ise.allowed_protocols": {
-        "label": "Allowed protocol services", "role": "admin", "mutating": False,
+        "label": "Allowed protocol services", "role": "paid", "mutating": False,
         "summary": "List allowed-protocols services, e.g. Default Network Access (ERS)",
         "params": [], "call": _read("GET", "/ers/config/allowedprotocols"),
     },
 
-    # --- ERS write: register the WLC as a RADIUS NAD (admin; reset-recoverable) ---
+    # --- ERS write: register the WLC as a RADIUS NAD (paid; reset-recoverable) ---
     "ise.add_nad": {
-        "label": "Register the WLC as a NAD", "role": "admin", "mutating": True,
+        "label": "Register the WLC as a NAD", "role": "paid", "mutating": True,
         "summary": "Add the 9800-CL to ISE as a RADIUS network device — a reset wipes it",
         "params": [{"name": "name", "label": "Device name", "required": False,
                     "example": "wlc-demo"}],
