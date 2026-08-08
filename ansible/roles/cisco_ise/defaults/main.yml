@@ -25,7 +25,7 @@ ise_hostname: "{{ inventory_hostname }}"     # PAN / mgmt FQDN or IP the API ans
 ise_username: ""                             # ERS admin (vault)
 ise_password: ""                             # ERS admin pw (vault)
 ise_verify: true                             # verify the PAN's TLS cert (set false only to bootstrap)
-ise_version: "3.4.0.608"                     # match your deployed ISE; the SDK keys behavior off this
+ise_version: "3.3_patch_1"               # ⚠ SDK version STRING, not the ISE build: ciscoisesdk has no 3.4 entry (jumps 3.3_patch_1 -> 3.5.0); 3.4.0.608 is REJECTED. Verified vs DevNet ISE 3.4 sandbox 2026-08-07.
 ise_uses_api_gateway: false                  # true if you front ISE with the API gateway
 ise_debug: false
 
@@ -47,7 +47,9 @@ ise_manage_trusted: true
 #     trust_for_certificate_based_admin_auth: false
 #     trust_for_cisco_services:  false
 #     allow_basic_constraint_ca_false: false
-#     enable_ocsp:               false
+#     allow_out_of_date_cert:    false  # REQUIRED by the import API (sent always)
+#     allow_sha1_certificates:   false  # REQUIRED by the import API (sent always)
+#     (enable_ocsp REMOVED 2026-08-07: import API rejects enableOCSPValidation - update-only field)
 ise_trusted_certificates: []
 
 # --- (2) system certificate (admin/EAP/portal/pxGrid/RADIUS) -------------

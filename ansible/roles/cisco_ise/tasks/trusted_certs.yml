@@ -28,11 +28,12 @@
     description: "{{ item.description | default('') }}"
     data: "{{ lookup('ansible.builtin.file', item.path) }}"
     allowBasicConstraintCAFalse: "{{ item.allow_basic_constraint_ca_false | default(false) }}"
+    allowOutOfDateCert: "{{ item.allow_out_of_date_cert | default(false) }}"
+    allowSHA1Certificates: "{{ item.allow_sha1_certificates | default(false) }}"
     trustForIseAuth: "{{ item.trust_for_ise_auth | default(true) }}"
     trustForClientAuth: "{{ item.trust_for_client_auth | default(true) }}"
     trustForCertificateBasedAdminAuth: "{{ item.trust_for_certificate_based_admin_auth | default(false) }}"
     trustForCiscoServicesAuth: "{{ item.trust_for_cisco_services | default(false) }}"
-    enableOCSPValidation: "{{ item.enable_ocsp | default(false) }}"
     validateCertificateExtensions: "{{ item.validate_extensions | default(true) }}"
   register: ise_trusted_result
 
